@@ -106,9 +106,6 @@ source venv/bin/activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Run the fix script (writes all backend files)
-python fix_project.py
-
 # 5. Run migrations
 python manage.py makemigrations users academics attendance quizzes
 python manage.py migrate
@@ -129,9 +126,6 @@ Backend runs at: `http://localhost:8000`
 ```bash
 # 1. Navigate to frontend folder
 cd eduportal
-
-# 2. Run the fix script (writes all frontend files)
-python fix_frontend.py
 
 # 3. Install dependencies
 npm install
