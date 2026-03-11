@@ -1,24 +1,100 @@
 # EduPortal — School Management Platform
 
-> **Phase 1 Complete** — Role-Based Authentication & Core Dashboards
-
----
-
-## Overview
-
-EduPortal is a full-stack school management platform built with **Django REST Framework** (backend) and **React** (frontend). Phase 1 establishes the foundation: three distinct user roles, JWT authentication, and dedicated dashboards for each role.
+A full-stack school management system built with Django REST Framework + React.
 
 ---
 
 ## Tech Stack
 
-| Layer     | Technology                                      |
-|-----------|-------------------------------------------------|
-| Backend   | Django 5.0.3, Django REST Framework, SimpleJWT  |
-| Frontend  | React 18, React Router v6                       |
-| Database  | SQLite (development)                            |
-| Auth      | JWT (Access + Refresh tokens)                   |
-| Styling   | Inline CSS (no external UI library)             |
+| Layer | Technology |
+|-------|-----------|
+| Backend | Django 5 + Django REST Framework + JWT |
+| Frontend | React 18 + React Router |
+| Database | SQLite (dev) |
+| Auth | JWT (access + refresh tokens) |
+
+---
+
+## User Roles
+
+- **Admin** — full control over users, classes, grades, analytics
+- **Teacher** — attendance, quizzes, assignments, timetable, messaging
+- **Student** — view own data, take quizzes, submit assignments
+- **Parent** — view child's progress, message teacher
+
+---
+
+## Phases
+
+### Phase 1 — Foundation & Authentication
+- Custom user model (email-based login + role field)
+- JWT login with auto-refresh
+- Role-based routing (each role → its own dashboard)
+- Landing page with 4 role cards
+
+### Phase 2 — Academic Structure
+- Grades and Classes management (Admin)
+- Assign teachers and students to classes
+- Admin, Teacher, Student dashboards
+
+### Phase 3 — Attendance & Quizzes
+- Daily attendance (Teacher marks present/absent/late)
+- Attendance report per class
+- Quiz builder with multiple-choice questions and timer (Teacher)
+- Auto-graded quiz taking (Student)
+- Quiz results with pass/fail breakdown
+
+### Phase 4 — Parent Portal, Grade Book & Notifications
+- Parent accounts linked to student children
+- Parent dashboard (attendance rate + quiz results)
+- Grade Book for Admin (all students with attendance % and quiz avg)
+- Notifications — Teacher sends to class; Student sees bell with unread count
+
+### Phase 5 — Timetable, Assignments, Messages & Analytics
+- Weekly timetable per class (Teacher builds, Student views)
+- Assignments with due date and max score (Teacher creates, Student submits)
+- Assignment grading with feedback (Teacher)
+- Direct messaging between Teacher and Students
+- Admin can message any user
+- Analytics dashboard with KPIs, attendance trend chart, top classes
+
+### Phase 6 — Profile, Parent Portal+, PDF Export & UI Polish
+- Profile page for all users (edit name + change password)
+- Full parent portal (attendance calendar, quiz scores, assignments)
+- Parent can message child's teacher
+- PDF report card per student
+- PDF attendance report per class
+- Loading spinners across all dashboards
+
+---
+
+## Quick Start
+
+**Backend**
+```bash
+cd "D:\School Management\school_backend"
+python manage.py runserver
+```
+
+**Frontend**
+```bash
+cd "D:\School Management\eduportal"
+npm start
+```
+
+- Backend → http://localhost:8000
+- Frontend → http://localhost:3000
+
+---
+
+## Test Accounts
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@school.edu | Admin@123 |
+| Teacher | teacher1@school.edu | Teacher@123 |
+| Student | student1@school.edu | Student@123 |
+| Parent | *(created by admin)* | Parent@123 |
 
 ---
 
@@ -26,129 +102,21 @@ EduPortal is a full-stack school management platform built with **Django REST Fr
 
 ```
 School Management/
-├── school_backend/          # Django project
-│   ├── manage.py
-│   ├── seed_data.py         # Creates test accounts
-│   ├── requirements.txt
-│   ├── school_backend/      # Django settings & URLs
-│   │   ├── settings.py
-│   │   ├── urls.py
-│   │   └── wsgi.py
-│   ├── users/               # Auth, roles, user management
-│   │   ├── models.py        # CustomUser, StudentProfile, TeacherProfile
-│   │   ├── views.py         # LoginView, MeView, UserViewSet
-│   │   ├── serializers.py
-│   │   ├── permissions.py   # IsAdmin, IsTeacher, IsStudent
-│   │   └── urls.py
-│   ├── academics/           # Grades & Classes
-│   │   ├── models.py        # Grade, ClassRoom
-│   │   ├── views.py
-│   │   ├── serializers.py
-│   │   └── urls.py
-│   ├── attendance/          # Attendance records
-│   │   ├── models.py        # AttendanceRecord
-│   │   ├── views.py         # BulkAttendanceView
-│   │   ├── serializers.py
-│   │   └── urls.py
-│   └── quizzes/             # Quiz system
-│       ├── models.py        # Quiz, Question, Choice, QuizAttempt
-│       ├── views.py
-│       ├── serializers.py
-│       └── urls.py
-│
-└── eduportal/               # React frontend
-    ├── public/
-    │   └── index.html
-    ├── src/
-    │   ├── index.js
-    │   ├── App.jsx          # Router & route protection
-    │   ├── api.js           # All API calls (axios-free, fetch)
-    │   ├── context/
-    │   │   └── AuthContext.jsx
-    │   ├── components/
-    │   │   └── ProtectedRoute.jsx
-    │   └── pages/
-    │       ├── LandingPage.jsx
-    │       ├── LoginPage.jsx
-    │       ├── AdminDashboard.jsx
-    │       ├── TeacherDashboard.jsx
-    │       └── StudentDashboard.jsx
-    ├── package.json
-    └── .env
+├── school_backend/     ← Django backend
+│   ├── users/          ← Auth, profiles, parent portal
+│   ├── academics/      ← Grades & classes
+│   ├── attendance/     ← Attendance records
+│   ├── quizzes/        ← Quizzes & results
+│   ├── notifications/  ← Notifications
+│   ├── timetable/      ← Weekly timetable
+│   ├── assignments/    ← Assignments & submissions
+│   ├── messaging/      ← Direct messages
+│   ├── analytics/      ← Admin analytics
+│   └── reports/        ← PDF export
+└── eduportal/          ← React frontend
+    └── src/
+        ├── pages/      ← Dashboard pages
+        ├── components/ ← Shared components
+        ├── context/    ← Auth context
+        └── api.js      ← All API calls
 ```
-
----
-
-## Setup & Installation
-
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- pip
-
----
-
-### Backend Setup
-
-```bash
-# 1. Navigate to backend folder
-cd school_backend
-
-# 2. Create and activate virtual environment
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Mac/Linux
-source venv/bin/activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 5. Run migrations
-python manage.py makemigrations users academics attendance quizzes
-python manage.py migrate
-
-# 6. Seed test data
-Get-Content seed_data.py | python manage.py shell
-
-# 7. Start the server
-python manage.py runserver
-```
-
-Backend runs at: `http://localhost:8000`
-
----
-
-### Frontend Setup
-
-```bash
-# 1. Navigate to frontend folder
-cd eduportal
-
-# 3. Install dependencies
-npm install
-
-# 4. Start React
-npm start
-```
-
-Frontend runs at: `http://localhost:3000`
-
----
-
-## Test Accounts
-
-| Role    | Email                  | Password     |
-|---------|------------------------|--------------|
-| Admin   | admin@school.edu       | Admin@123    |
-| Teacher | teacher1@school.edu    | Teacher@123  |
-| Teacher | teacher2@school.edu    | Teacher@123  |
-| Teacher | teacher3@school.edu    | Teacher@123  |
-| Student | student1@school.edu    | Student@123  |
-| Student | student2@school.edu    | Student@123  |
-| Student | student3@school.edu    | Student@123  |
-| Student | student4@school.edu    | Student@123  |
-
----
