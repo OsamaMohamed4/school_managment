@@ -1,24 +1,15 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, StudentProfile, TeacherProfile
-
+from .models import CustomUser, StudentProfile, TeacherProfile, ParentProfile
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    list_display   = ["email", "full_name", "role", "is_active", "created_at"]
-    list_filter    = ["role", "is_active"]
-    search_fields  = ["email", "first_name", "last_name"]
-    ordering       = ["-created_at"]
-    fieldsets      = UserAdmin.fieldsets + (
-        ("Role & Status", {"fields": ("role",)}),
-    )
+    list_display  = ["email","first_name","last_name","role","is_active"]
+    list_filter   = ["role","is_active"]
+    search_fields = ["email","first_name","last_name"]
+    ordering      = ["-date_joined"]
+    fieldsets     = UserAdmin.fieldsets + (("Role", {"fields": ("role",)}),)
 
-
-@admin.register(StudentProfile)
-class StudentProfileAdmin(admin.ModelAdmin):
-    list_display = ["user", "class_room", "enrollment_date"]
-
-
-@admin.register(TeacherProfile)
-class TeacherProfileAdmin(admin.ModelAdmin):
-    list_display = ["user", "subject"]
+admin.register(StudentProfile)(admin.ModelAdmin)
+admin.register(TeacherProfile)(admin.ModelAdmin)
+admin.register(ParentProfile)(admin.ModelAdmin)

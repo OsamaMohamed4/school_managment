@@ -1,37 +1,27 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
+import { getUser, clearAuth } from "../api";
 
 const AuthContext = createContext(null);
 
-const getStoredUser = () => {
-  try {
-    const u = localStorage.getItem("user");
-    return u ? JSON.parse(u) : null;
-  } catch {
-    return null;
-  }
-};
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(getStoredUser);
-  const [role, setRole] = useState(() => localStorage.getItem("role"));
+  const [user, setUser] = useState(() => getUser());
+
+  useEffect(() => {
+    const stored = getUser();
+    if (stored) setUser(stored);
+  }, []);
 
   const login = (userData) => {
-    setUser(userData.user);
-    setRole(userData.user.role);
+    setUser(userData);
   };
 
   const logout = () => {
-    ["access_token", "refresh_token", "role", "user"].forEach((k) =>
-      localStorage.removeItem(k)
-    );
+    clearAuth();
     setUser(null);
-    setRole(null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, role, login, logout, isLoggedIn: !!user }}
-    >
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

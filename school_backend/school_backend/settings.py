@@ -30,6 +30,12 @@ INSTALLED_APPS = [
     "academics.apps.AcademicsConfig",
     "attendance.apps.AttendanceConfig",
     "quizzes.apps.QuizzesConfig",
+    "notifications.apps.NotificationsConfig",
+    "timetable.apps.TimetableConfig",
+    "assignments.apps.AssignmentsConfig",
+    "messaging.apps.MessagingConfig",
+    "analytics.apps.AnalyticsConfig",
+    "reports.apps.ReportsConfig",
 ]
 
 MIDDLEWARE = [
