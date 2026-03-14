@@ -523,6 +523,19 @@ export default function TeacherDashboard() {
             </div>
           )}
 
+          {tab==="assignments"&&<div className="fade"><AssignmentsPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
+          {tab==="messages"&&<div className="fade"><MessagesPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
+          {tab==="timetable"&&(
+            <div className="fade">
+              {classes.map(c=>(
+                <div key={c.id} style={{marginBottom:24}}>
+                  <TimetablePanel classId={c.id} readOnly={false} accentColor="#059669"/>
+                </div>
+              ))}
+              {classes.length===0&&<div style={{textAlign:"center",color:"#94A3B8",padding:40}}>No classes assigned.</div>}
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -538,19 +551,6 @@ export default function TeacherDashboard() {
           </div>
         </div>
       )}
-
-          {tab==="assignments"&&<div className="fade"><AssignmentsPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
-          {tab==="messages"&&<div className="fade"><MessagesPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
-          {tab==="timetable"&&(
-            <div className="fade">
-              {classes.map(c=>(
-                <div key={c.id} style={{marginBottom:24}}>
-                  <TimetablePanel classId={c.id} readOnly={false} accentColor="#059669"/>
-                </div>
-              ))}
-              {classes.length===0&&<div style={{textAlign:"center",color:"#94A3B8",padding:40}}>No classes assigned.</div>}
-            </div>
-          )}
 
       {toast&&<div className={`toast ${toast.type==="success"?"ts":"te"}`}>{toast.msg}</div>}
     </div>

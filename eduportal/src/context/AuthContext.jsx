@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { getUser, clearAuth } from "../api";
+import { authAPI, getUser, clearAuth } from "../api";
 
 const AuthContext = createContext(null);
 
@@ -11,8 +11,19 @@ export function AuthProvider({ children }) {
     if (stored) setUser(stored);
   }, []);
 
-  const login = (userData) => {
-    setUser(userData);
+  // ✅ FIX: login now calls the API and validates the role
+  const login = async (email, password, role) => {
+    const data = await authAPI.login(email, password);
+    // authAPI.login already saves tokens + user to localStorage
+
+    // ✅ Validate that the user's role matches what they selected
+    if (data.user.role !== role) {
+      clearAuth(); // remove the tokens we just saved
+      throw { detail: `This account is not a ${role} account. Please select the correct role.` };
+    }
+
+    setUser(data.user);
+    return data;
   };
 
   const logout = () => {

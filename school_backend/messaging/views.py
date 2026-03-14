@@ -67,6 +67,27 @@ class ContactsView(APIView):
         elif role == "admin":
             users = CustomUser.objects.exclude(id=request.user.id).filter(is_active=True)
             result = [{"id":u.id,"full_name":u.get_full_name(),"role":u.role} for u in users]
+        elif role == "parent":
+            # Parent can message the teachers of their linked children
+            from users.models import ParentProfile
+            result = []
+            seen_ids = set()
+            try:
+                profile = ParentProfile.objects.get(user=request.user)
+                for child in profile.children.filter(is_active=True):
+                    sp = getattr(child, "student_profile", None)
+                    if sp and sp.class_room and sp.class_room.teacher:
+                        t = sp.class_room.teacher
+                        if t.id not in seen_ids:
+                            seen_ids.add(t.id)
+                            result.append({
+                                "id":        t.id,
+                                "full_name": t.get_full_name(),
+                                "role":      t.role,
+                                "note":      f"Teacher of {child.get_full_name()}",
+                            })
+            except ParentProfile.DoesNotExist:
+                pass
         else:
             result = []
         return Response(result)

@@ -1,114 +1,133 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { authAPI } from "../api";
 
-const ROLE_CONFIG = {
-  admin:   { label:"Admin",   icon:"🏫", color:"#2563EB", bg:"#EFF6FF", border:"#BFDBFE", dark:"#1D4ED8" },
-  teacher: { label:"Teacher", icon:"📚", color:"#059669", bg:"#ECFDF5", border:"#A7F3D0", dark:"#047857" },
-  student: { label:"Student", icon:"🎓", color:"#7C3AED", bg:"#F5F3FF", border:"#DDD6FE", dark:"#6D28D9" },
-  parent:  { label:"Parent",  icon:"👨‍👩‍👦", color:"#D97706", bg:"#FFFBEB", border:"#FDE68A", dark:"#B45309" },
+const ROLES = {
+  admin:   { label:"Admin",   icon:"🏫", accent:"#3B82F6", light:"#60A5FA", bg:"linear-gradient(135deg,#0D1F3C 0%,#1E3A5F 100%)" },
+  teacher: { label:"Teacher", icon:"📚", accent:"#10B981", light:"#34D399", bg:"linear-gradient(135deg,#042F1E 0%,#064E3B 100%)" },
+  student: { label:"Student", icon:"🎓", accent:"#8B5CF6", light:"#A78BFA", bg:"linear-gradient(135deg,#1E0A3C 0%,#2D1B69 100%)" },
+  parent:  { label:"Parent",  icon:"👨‍👩‍👦",accent:"#F59E0B", light:"#FBBF24", bg:"linear-gradient(135deg,#2D1B00 0%,#451A03 100%)" },
 };
 
-const DASHBOARD = {
-  admin:   "/admin/dashboard",
-  teacher: "/teacher/dashboard",
-  student: "/student/dashboard",
-  parent:  "/parent/dashboard",
-};
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body,html,#root{background:#0A0F1E!important;min-height:100vh;}
+
+  .lp-root{min-height:100vh;background:#0A0F1E;display:flex;align-items:stretch;font-family:'Sora',sans-serif;}
+
+  .lp-left{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 40px;position:relative;overflow:hidden;}
+  .lp-left-inner{position:relative;z-index:2;text-align:center;animation:slideL .6s ease both;}
+  @keyframes slideL{from{opacity:0;transform:translateX(-30px);}to{opacity:1;transform:translateX(0);}}
+
+  .role-icon-big{width:90px;height:90px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:44px;margin:0 auto 24px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .welcome-title{font-family:'Playfair Display',serif;font-size:clamp(28px,4vw,40px);font-weight:800;color:#F1F5F9;line-height:1.2;margin-bottom:12px;}
+  .welcome-sub{font-size:14px;color:#64748B;line-height:1.6;max-width:280px;margin:0 auto;}
+
+  /* slide indicators */
+  .dots{display:flex;gap:8px;justify-content:center;margin-top:32px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.15);transition:all .3s;}
+  .dot.a{width:24px;border-radius:4px;}
+
+  .lp-right{width:420px;background:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 40px;border-left:1px solid rgba(255,255,255,.07);}
+  .login-card{width:100%;animation:slideR .6s ease .1s both;}
+  @keyframes slideR{from{opacity:0;transform:translateX(30px);}to{opacity:1;transform:translateX(0);}}
+
+  .card-bar{height:3px;border-radius:999px;margin-bottom:28px;}
+  .card-title{font-family:'Playfair Display',serif;font-size:26px;font-weight:800;color:#F1F5F9;margin-bottom:6px;}
+  .card-sub{font-size:13px;color:#64748B;margin-bottom:28px;}
+
+  .lbl{display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px;}
+  .inp{width:100%;padding:12px 14px;background:#0D1526;border:1.5px solid rgba(255,255,255,.1);border-radius:11px;font-size:14px;color:#E2E8F0;outline:none;font-family:'Sora',sans-serif;transition:border-color .2s,box-shadow .2s;}
+  .inp::placeholder{color:#334155;}
+  .field{margin-bottom:16px;}
+
+  .submit-btn{width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:'Sora',sans-serif;margin-top:4px;transition:all .2s;letter-spacing:.3px;}
+  .submit-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.1);}
+  .submit-btn:disabled{opacity:.6;cursor:not-allowed;}
+
+  .back-btn{width:100%;padding:11px;border:1px solid rgba(255,255,255,.1);border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Sora',sans-serif;background:rgba(255,255,255,.04);color:#64748B;margin-top:10px;transition:all .2s;}
+  .back-btn:hover{background:rgba(255,255,255,.08);color:#94A3B8;}
+
+  .err-box{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:11px 14px;font-size:13px;color:#F87171;margin-bottom:16px;animation:shake .4s ease;}
+  @keyframes shake{0%,100%{transform:translateX(0);}20%,60%{transform:translateX(-6px);}40%,80%{transform:translateX(6px);}}
+
+  @media(max-width:700px){.lp-root{flex-direction:column;}.lp-left{min-height:260px;padding:40px 24px;}.lp-right{width:100%;padding:32px 24px;}}
+`;
 
 export default function LoginPage() {
-  const { role }            = useParams();
-  const navigate             = useNavigate();
-  const { login }            = useAuth();
-  const [email,    setEmail] = useState("");
-  const [password, setPass]  = useState("");
-  const [error,    setError] = useState("");
-  const [loading,  setLoading] = useState(false);
+  const { role = "admin" } = useParams();
+  const { login } = useAuth();
+  const navigate  = useNavigate();
+  const R = ROLES[role] || ROLES.admin;
 
-  const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.student;
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState("");
+  const [focused,  setFocused]  = useState("");
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (!email || !password) { setError("Please enter email and password."); return; }
-    setLoading(true); setError("");
+  const focusStyle = { borderColor: R.accent, boxShadow: `0 0 0 3px ${R.accent}22` };
+
+  const submit = async e => {
+    e.preventDefault(); setError(""); setLoading(true);
     try {
-      const data = await authAPI.login(email, password);
-      login(data.user);
-      navigate(DASHBOARD[data.user.role] || "/");
-    } catch (err) {
-      setError(err?.error || "Invalid credentials. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+      await login(email, password, role);
+      navigate(`/${role}`);
+    } catch(err) {
+      setError(err?.detail || err?.non_field_errors?.[0] || "Invalid email or password");
+    } finally { setLoading(false); }
   };
 
   return (
-    <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${cfg.bg} 0%,#F8FAFC 100%)`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:"20px"}}>
-      <div style={{background:"#fff",borderRadius:20,padding:"36px 32px",width:"100%",maxWidth:400,border:`2px solid ${cfg.border}`,boxShadow:`0 20px 60px ${cfg.color}18`}}>
+    <div className="lp-root">
+      <style>{CSS}</style>
 
-        {/* Header */}
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{width:56,height:56,borderRadius:16,background:cfg.bg,border:`2px solid ${cfg.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 14px"}}>
-            {cfg.icon}
+      {/* LEFT PANEL */}
+      <div className="lp-left" style={{background:R.bg}}>
+        {/* grid overlay */}
+        <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px)",backgroundSize:"40px 40px"}}/>
+        <div className="lp-left-inner">
+          <div className="role-icon-big" style={{background:`${R.accent}20`,border:`2px solid ${R.accent}40`}}>{R.icon}</div>
+          <h2 className="welcome-title">Welcome back,<br/>{R.label}</h2>
+          <p className="welcome-sub">Sign in to your EduPortal account to access your {role} dashboard.</p>
+          <div className="dots">
+            {["admin","teacher","student","parent"].map(r=>(
+              <div key={r} className={`dot${r===role?" a":""}`} style={r===role?{background:R.accent}:{}}/>
+            ))}
           </div>
-          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:800,color:"#0F172A",margin:0}}>
-            {cfg.label} Login
-          </h1>
-          <p style={{fontSize:13,color:"#64748B",marginTop:6}}>Sign in to your EduPortal account</p>
         </div>
+      </div>
 
-        {/* Form */}
-        <form onSubmit={handleLogin}>
-          <div style={{marginBottom:14}}>
-            <label style={{display:"block",fontSize:12,fontWeight:600,color:"#374151",marginBottom:5}}>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e=>{setEmail(e.target.value);setError("");}}
-              placeholder="your@email.com"
-              style={{width:"100%",padding:"11px 14px",border:`1.5px solid ${error?"#EF4444":"#E2E8F0"}`,borderRadius:10,fontSize:14,color:"#0F172A",outline:"none",fontFamily:"inherit",background:"#F8FAFC",boxSizing:"border-box",transition:"border .2s"}}
-              onFocus={e=>e.target.style.borderColor=cfg.color}
-              onBlur={e=>e.target.style.borderColor=error?"#EF4444":"#E2E8F0"}
-            />
-          </div>
+      {/* RIGHT PANEL */}
+      <div className="lp-right">
+        <div className="login-card">
+          <div className="card-bar" style={{background:`linear-gradient(90deg,${R.accent},${R.light})`}}/>
+          <h2 className="card-title">{R.label} Sign In</h2>
+          <p className="card-sub">Enter your credentials to continue</p>
 
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:12,fontWeight:600,color:"#374151",marginBottom:5}}>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e=>{setPass(e.target.value);setError("");}}
-              placeholder="••••••••"
-              style={{width:"100%",padding:"11px 14px",border:`1.5px solid ${error?"#EF4444":"#E2E8F0"}`,borderRadius:10,fontSize:14,color:"#0F172A",outline:"none",fontFamily:"inherit",background:"#F8FAFC",boxSizing:"border-box",transition:"border .2s"}}
-              onFocus={e=>e.target.style.borderColor=cfg.color}
-              onBlur={e=>e.target.style.borderColor=error?"#EF4444":"#E2E8F0"}
-            />
-          </div>
+          {error && <div className="err-box">⚠️ {error}</div>}
 
-          {error && (
-            <div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:9,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#EF4444",fontWeight:500}}>
-              {error}
+          <form onSubmit={submit}>
+            <div className="field">
+              <label className="lbl">Email Address</label>
+              <input className="inp" type="email" placeholder="your@email.com" value={email}
+                onChange={e=>setEmail(e.target.value)} onFocus={()=>setFocused("email")} onBlur={()=>setFocused("")}
+                style={focused==="email"?focusStyle:{}} autoComplete="email"/>
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{width:"100%",padding:"13px",background:loading?"#94A3B8":cfg.color,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"inherit",transition:"all .2s",letterSpacing:.3}}
-          >
-            {loading ? "Signing in..." : `Sign in as ${cfg.label}`}
-          </button>
-        </form>
-
-        {/* Back button */}
-        <button
-          onClick={()=>navigate("/")}
-          style={{display:"block",width:"100%",marginTop:14,padding:"10px",background:"transparent",border:`1.5px solid ${cfg.border}`,borderRadius:10,fontSize:13,fontWeight:600,color:cfg.color,cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}
-        >
-          ← Back to role selection
-        </button>
-
+            <div className="field">
+              <label className="lbl">Password</label>
+              <input className="inp" type="password" placeholder="••••••••" value={password}
+                onChange={e=>setPassword(e.target.value)} onFocus={()=>setFocused("pass")} onBlur={()=>setFocused("")}
+                style={focused==="pass"?focusStyle:{}} autoComplete="current-password"/>
+            </div>
+            <button className="submit-btn" type="submit" disabled={loading}
+              style={{background:`linear-gradient(135deg,${R.accent},${R.light})`,color:"#fff",boxShadow:`0 8px 24px ${R.accent}44`}}>
+              {loading ? "Signing in..." : `Sign in as ${R.label} →`}
+            </button>
+          </form>
+          <button className="back-btn" onClick={()=>navigate("/")}>← Back to role selection</button>
+        </div>
       </div>
     </div>
   );

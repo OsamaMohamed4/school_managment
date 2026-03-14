@@ -72,7 +72,7 @@ export default function AssignmentsPanel({ accentColor="#059669", accentBg="#ECF
       <style>{`
         .asgn-card{background:#fff;border-radius:13px;padding:16px 18px;border:1.5px solid #E2E8F0;margin-bottom:10px;cursor:pointer;transition:all .18s;}
         .asgn-card:hover{border-color:${accentColor};box-shadow:0 2px 12px ${accentColor}18;}
-        .asgn-inp{width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#F8FAFC;}
+        .asgn-inp{width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#F8FAFC;color:#0F172A;}
         .asgn-inp:focus{border-color:${accentColor};}
         .asgn-btn{padding:8px 16px;border-radius:9px;border:none;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;transition:all .18s;}
       `}</style>

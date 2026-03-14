@@ -52,9 +52,9 @@ export default function TimetablePanel({ classId=null, readOnly=false, accentCol
         .tt-cell{padding:8px 10px;border-radius:9px;font-size:12px;position:relative;}
         .tt-del{position:absolute;top:4px;right:4px;background:#EF4444;color:#fff;border:none;border-radius:4px;font-size:10px;padding:2px 5px;cursor:pointer;opacity:0;transition:opacity .2s;}
         .tt-cell:hover .tt-del{opacity:1;}
-        .tt-inp{width:100%;padding:8px 11px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#F8FAFC;}
+        .tt-inp{width:100%;padding:8px 11px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#fff;color:#0F172A;}
         .tt-inp:focus{border-color:${accentColor};}
-        .tt-sel{width:100%;padding:8px 11px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#F8FAFC;outline:none;}
+        .tt-sel{width:100%;padding:8px 11px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;outline:none;}
       `}</style>
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -97,7 +97,7 @@ export default function TimetablePanel({ classId=null, readOnly=false, accentCol
 
       {showAdd&&(
         <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
-          <div style={{background:"#fff",borderRadius:18,padding:28,width:400,maxWidth:"93vw"}}>
+          <div style={{background:"#fff",borderRadius:18,padding:28,width:400,maxWidth:"93vw",color:"#0F172A"}}>
             <h3 style={{fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:20,marginBottom:18}}>Add Timetable Slot</h3>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
               <div><label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Day</label>

@@ -62,7 +62,7 @@ export default function MessagesPanel({ accentColor="#2563EB", accentBg="#EFF6FF
         .bubble.theirs{background:#F1F5F9;color:#0F172A;border-bottom-left-radius:4px;}
         .contact-btn{width:100%;padding:10px 14px;border-radius:10px;border:1.5px solid #E2E8F0;background:#fff;cursor:pointer;font-family:inherit;font-size:13px;text-align:left;transition:all .18s;margin-bottom:6px;}
         .contact-btn:hover{border-color:${accentColor};background:${accentBg};}
-        .msg-inp{flex:1;padding:10px 14px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:13px;font-family:inherit;outline:none;transition:border .2s;}
+        .msg-inp{flex:1;padding:10px 14px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:13px;font-family:inherit;outline:none;transition:border .2s;color:#0F172A;background:#fff;}
         .msg-inp:focus{border-color:${accentColor};}
       `}</style>
 

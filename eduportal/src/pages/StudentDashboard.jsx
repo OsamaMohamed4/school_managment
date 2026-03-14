@@ -305,12 +305,12 @@ export default function StudentDashboard() {
             </div>
           )}
 
-        </div>
-      </div>
-
           {tab==="assignments"&&<div className="fade"><AssignmentsPanel accentColor="#7C3AED" accentBg="#F5F3FF"/></div>}
           {tab==="messages"&&<div className="fade"><MessagesPanel accentColor="#7C3AED" accentBg="#F5F3FF"/></div>}
           {tab==="timetable"&&<div className="fade"><TimetablePanel readOnly={true} accentColor="#7C3AED"/></div>}
+
+        </div>
+      </div>
 
       {toast&&<div className={`toast ${toast.type==="success"?"ts":"te"}`}>{toast.msg}</div>}
     </div>
