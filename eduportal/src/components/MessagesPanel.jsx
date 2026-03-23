@@ -12,7 +12,17 @@ export default function MessagesPanel({ accentColor="#2563EB", accentBg="#EFF6FF
   const bottomRef = useRef(null);
 
   useEffect(()=>{
-    messagingAPI.conversations().then(setConvs).catch(()=>{});
+    messagingAPI.conversations().then(cs => {
+      // Deduplicate by other_user — same person may have multiple convs due to old bug
+      const seen = new Set();
+      const unique = (Array.isArray(cs) ? cs : []).filter(c => {
+        const uid = c.other_user?.id;
+        if (!uid || seen.has(uid)) return false;
+        seen.add(uid);
+        return true;
+      });
+      setConvs(unique);
+    }).catch(()=>{});
     messagingAPI.contacts().then(setContacts).catch(()=>{});
   },[]);
 
@@ -29,12 +39,30 @@ export default function MessagesPanel({ accentColor="#2563EB", accentBg="#EFF6FF
   };
 
   const startNew = async (userId) => {
+    // Check if conversation already exists in local list first
+    const existing = convs.find(c => c.other_user?.id === userId);
+    if (existing) {
+      openConv(existing);
+      return;
+    }
+    // Backend will also deduplicate (returns existing if found)
     const conv = await messagingAPI.start(userId);
     setSelConv(conv);
     const d = await messagingAPI.getConversation(conv.id);
     setMessages(d.messages||[]);
     setView("chat");
-    messagingAPI.conversations().then(setConvs).catch(()=>{});
+    // Refresh convs list — backend deduplication ensures no duplicates
+    messagingAPI.conversations().then(cs => {
+      // Deduplicate by other_user id on frontend as safety net
+      const seen = new Set();
+      const unique = cs.filter(c => {
+        const uid = c.other_user?.id;
+        if (!uid || seen.has(uid)) return false;
+        seen.add(uid);
+        return true;
+      });
+      setConvs(unique);
+    }).catch(()=>{});
   };
 
   const sendMsg = async () => {

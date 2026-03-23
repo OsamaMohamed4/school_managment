@@ -209,3 +209,26 @@ class ChangePasswordView(APIView):
         request.user.set_password(new)
         request.user.save()
         return Response({"message":"Password changed successfully."})
+
+
+class AdminParentChildrenView(APIView):
+    """Admin: GET /api/auth/admin/parent/<parent_id>/children/"""
+    permission_classes = [IsAdmin]
+
+    def get(self, request, parent_id):
+        parent     = get_object_or_404(CustomUser, pk=parent_id, role="parent")
+        profile, _ = ParentProfile.objects.get_or_create(user=parent)
+        children   = profile.children.all()
+        result = []
+        for c in children:
+            sp  = getattr(c, "student_profile", None)
+            cls = sp.class_room if sp else None
+            result.append({
+                "id":         c.id,
+                "full_name":  c.get_full_name(),
+                "email":      c.email,
+                "is_active":  c.is_active,
+                "class_name": cls.name if cls else None,
+                "grade_name": cls.grade.name if cls else None,
+            })
+        return Response(result)

@@ -12,13 +12,21 @@ class ConversationListView(APIView):
         return Response(ConversationSerializer(convs, many=True, context={"request":request}).data)
 
     def post(self, request):
-        """Start or get existing conversation with another user"""
+        """Start or get existing conversation — NEVER creates duplicates"""
         other_id = request.data.get("user_id")
         other    = get_object_or_404(CustomUser, pk=other_id)
-        # Check if conversation already exists
-        existing = request.user.conversations.filter(participants=other).first()
+
+        # Find exact conversation between exactly these two people
+        existing = None
+        for conv in request.user.conversations.prefetch_related("participants").all():
+            p_ids = set(conv.participants.values_list("id", flat=True))
+            if p_ids == {request.user.id, other.id}:
+                existing = conv
+                break
+
         if existing:
             return Response(ConversationSerializer(existing, context={"request":request}).data)
+
         conv = Conversation.objects.create()
         conv.participants.add(request.user, other)
         return Response(ConversationSerializer(conv, context={"request":request}).data, status=201)

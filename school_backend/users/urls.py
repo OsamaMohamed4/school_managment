@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.routers import SimpleRouter
 from .views import (
-    LoginView, MeView, UserViewSet,
+    LoginView, MeView, UserViewSet, AdminParentChildrenView,
     ProfileView, ChangePasswordView,
     ParentChildrenView, ParentChildDetailView, ParentLinkChildView,
 )
@@ -19,5 +19,6 @@ urlpatterns = [
     path("auth/parent/children/",             ParentChildrenView.as_view(),    name="parent-children"),
     path("auth/parent/child/<int:child_id>/", ParentChildDetailView.as_view(), name="parent-child-detail"),
     path("auth/parent/link-child/",           ParentLinkChildView.as_view(),   name="parent-link-child"),
+    path("auth/admin/parent/<int:parent_id>/children/", AdminParentChildrenView.as_view(), name="admin-parent-children"),
     path("", include(router.urls)),
 ]

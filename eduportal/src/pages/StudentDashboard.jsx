@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { quizzesAPI, attendanceAPI, notificationsAPI } from "../api";
-import AssignmentsPanel from "../components/AssignmentsPanel";
+import VideosPanel      from "../components/VideosPanel";
+import AssignmentsPanel  from "../components/AssignmentsPanel";
+import LessonPlanPanel   from "../components/LessonPlanPanel";
 import TimetablePanel   from "../components/TimetablePanel";
 import MessagesPanel    from "../components/MessagesPanel";
 
@@ -68,7 +70,7 @@ export default function StudentDashboard() {
   const totalQs=quizData?.questions?.length||0;
   const remaining=totalQs-answered;
 
-  const NAV=["overview","quizzes","attendance","grades","notifications","assignments","messages","timetable"];
+  const NAV=["overview","quizzes","attendance","grades","notifications","assignments","messages","timetable","lesson-plan","videos"];
   const notifColor=(t)=>t==="info"?"#2563EB":t==="warning"?"#D97706":"#059669";
   const notifBg=(t)=>t==="info"?"#EFF6FF":t==="warning"?"#FEF3C7":"#ECFDF5";
 
@@ -307,6 +309,10 @@ export default function StudentDashboard() {
 
           {tab==="assignments"&&<div className="fade"><AssignmentsPanel accentColor="#7C3AED" accentBg="#F5F3FF"/></div>}
           {tab==="messages"&&<div className="fade"><MessagesPanel accentColor="#7C3AED" accentBg="#F5F3FF"/></div>}
+          {tab==="lesson-plan"&&<div className="fade"><LessonPlanPanel accentColor="#7C3AED" accentBg="#F5F3FF" readOnly={true}/></div>}
+
+          {tab==="videos"&&<div className="fade"><VideosPanel accentColor="#7C3AED" accentBg="#F5F3FF"/></div>}
+
           {tab==="timetable"&&<div className="fade"><TimetablePanel readOnly={true} accentColor="#7C3AED"/></div>}
 
         </div>

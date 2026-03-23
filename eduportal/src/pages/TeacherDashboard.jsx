@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { academicsAPI, attendanceAPI, quizzesAPI, notificationsAPI } from "../api";
+import VideosPanel      from "../components/VideosPanel";
 import AssignmentsPanel from "../components/AssignmentsPanel";
+import LessonPlanPanel  from "../components/LessonPlanPanel";
 import TimetablePanel   from "../components/TimetablePanel";
 import MessagesPanel    from "../components/MessagesPanel";
 
-const NAV = ["overview","attendance","quizzes","results","reports","notifications","assignments","messages","timetable"];
+const NAV = ["overview","attendance","quizzes","results","reports","notifications","assignments","messages","timetable","lesson-plan","videos"];
 const Q_TYPES = [
   { value:"mcq",          label:"Multiple Choice" },
   { value:"true_false",   label:"True / False" },
@@ -525,11 +527,15 @@ export default function TeacherDashboard() {
 
           {tab==="assignments"&&<div className="fade"><AssignmentsPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
           {tab==="messages"&&<div className="fade"><MessagesPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
+          {tab==="lesson-plan"&&<div className="fade"><LessonPlanPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
+
+          {tab==="videos"&&<div className="fade"><VideosPanel accentColor="#059669" accentBg="#ECFDF5"/></div>}
+
           {tab==="timetable"&&(
             <div className="fade">
               {classes.map(c=>(
                 <div key={c.id} style={{marginBottom:24}}>
-                  <TimetablePanel classId={c.id} readOnly={false} accentColor="#059669"/>
+                  <TimetablePanel isTeacher={true} readOnly={true} accentColor="#059669"/>
                 </div>
               ))}
               {classes.length===0&&<div style={{textAlign:"center",color:"#94A3B8",padding:40}}>No classes assigned.</div>}

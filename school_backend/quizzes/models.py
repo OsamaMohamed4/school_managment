@@ -73,6 +73,11 @@ class QuizAttempt(models.Model):
     class Meta:
         unique_together = ["student", "quiz"]
         ordering        = ["-submitted_at"]
+        indexes = [
+            models.Index(fields=["student"],         name="attempt_student_idx"),
+            models.Index(fields=["quiz"],             name="attempt_quiz_idx"),
+            models.Index(fields=["student", "quiz"], name="attempt_student_quiz_idx"),
+        ]
 
     @property
     def percentage(self):

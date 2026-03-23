@@ -8,6 +8,7 @@ from quizzes.models import QuizAttempt, Quiz
 from assignments.models import Assignment, Submission
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import Avg, Count, Case, When, FloatField, F, ExpressionWrapper, Sum
 
 
 class AnalyticsDashboardView(APIView):
@@ -37,37 +38,67 @@ class AnalyticsDashboardView(APIView):
         att_month_p = att_month.filter(status="present").count()
         att_month_rate = round((att_month_p / att_month.count() * 100), 1) if att_month.count() else 0
 
-        # ── Quizzes ──
+        # ── Quizzes ── (DB aggregation — no N+1)
         total_quizzes  = Quiz.objects.count()
         total_attempts = QuizAttempt.objects.count()
         avg_quiz_score = 0
         if total_attempts:
-            avg_quiz_score = round(
-                sum(a.percentage for a in QuizAttempt.objects.all()) / total_attempts, 1
+            agg = QuizAttempt.objects.filter(
+                total_points__gt=0
+            ).aggregate(
+                avg=Avg(
+                    ExpressionWrapper(
+                        F("score") * 100.0 / F("total_points"),
+                        output_field=FloatField()
+                    )
+                )
             )
+            avg_quiz_score = round(agg["avg"] or 0, 1)
 
         # ── Assignments ──
         total_assignments  = Assignment.objects.count()
         total_submissions  = Submission.objects.count()
         graded_submissions = Submission.objects.filter(status="graded").count()
 
-        # ── Top performing classes ──
+        # ── Top performing classes ── (optimized: 2 queries total)
         class_stats = []
-        for cls in ClassRoom.objects.prefetch_related("students")[:10]:
-            students = CustomUser.objects.filter(student_profile__class_room=cls)
-            if not students.exists():
+        # Use 'num_students' — avoids conflict with ClassRoom.student_count @property
+        classes_qs = ClassRoom.objects.select_related("grade").annotate(
+            num_students=Count("students", distinct=True)
+        ).filter(num_students__gt=0)[:10]
+
+        for cls in classes_qs:
+            student_ids = list(
+                CustomUser.objects.filter(
+                    student_profile__class_room=cls
+                ).values_list("id", flat=True)
+            )
+            if not student_ids:
                 continue
-            att   = AttendanceRecord.objects.filter(student__in=students)
-            pres  = att.filter(status="present").count()
-            rate  = round((pres / att.count() * 100), 1) if att.count() else 0
-            attempts = QuizAttempt.objects.filter(student__in=students)
-            q_avg = 0
-            if attempts.exists():
-                q_avg = round(sum(a.percentage for a in attempts) / attempts.count(), 1)
+            att_agg = AttendanceRecord.objects.filter(
+                student_id__in=student_ids
+            ).aggregate(
+                total=Count("id"),
+                present=Count(Case(When(status="present", then=1)))
+            )
+            total_a = att_agg["total"] or 0
+            pres_a  = att_agg["present"] or 0
+            rate    = round((pres_a / total_a * 100), 1) if total_a else 0
+
+            quiz_agg = QuizAttempt.objects.filter(
+                student_id__in=student_ids, total_points__gt=0
+            ).aggregate(
+                avg=Avg(ExpressionWrapper(
+                    F("score") * 100.0 / F("total_points"),
+                    output_field=FloatField()
+                ))
+            )
+            q_avg = round(quiz_agg["avg"] or 0, 1)
+
             class_stats.append({
                 "class_name":      cls.name,
                 "grade":           cls.grade.name,
-                "student_count":   students.count(),
+                "student_count":   cls.num_students,
                 "attendance_rate": rate,
                 "quiz_avg":        q_avg,
             })

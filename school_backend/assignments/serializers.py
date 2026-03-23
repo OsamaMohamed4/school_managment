@@ -5,13 +5,30 @@ from django.utils import timezone
 
 class SubmissionSerializer(serializers.ModelSerializer):
     student_name = serializers.SerializerMethodField()
+    file_name    = serializers.SerializerMethodField()
+    file_url     = serializers.SerializerMethodField()
+
     class Meta:
         model  = Submission
         fields = ["id","assignment","student","student_name","text",
+                  "file","file_name","file_url",
                   "score","feedback","status","submitted_at"]
         read_only_fields = ["id","student","submitted_at"]
     def get_student_name(self, obj):
         return obj.student.get_full_name()
+
+    def get_file_name(self, obj):
+        if obj.file:
+            return obj.file.name.split("/")[-1]
+        return None
+
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
 
 
 class AssignmentSerializer(serializers.ModelSerializer):

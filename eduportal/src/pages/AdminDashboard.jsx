@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { usersAPI, academicsAPI, gradeBookAPI, analyticsAPI, parentAPI } from "../api";
+import { usersAPI, academicsAPI, gradeBookAPI, analyticsAPI, parentAPI, timetableAPI } from "../api";
+import TimetablePanel          from "../components/TimetablePanel";
+import AdminTimetableManager from "../components/AdminTimetableManager";
 
 const NAV = [
   { id:"overview",  label:"Overview",          icon:"⚡" },
@@ -10,11 +12,87 @@ const NAV = [
   { id:"parents",   label:"Parent Linking",    icon:"👨‍👩‍👦" },
   { id:"gradebook", label:"Grade Book",        icon:"📊" },
   { id:"analytics", label:"Analytics",         icon:"📈" },
+  { id:"timetable", label:"Timetable",          icon:"📅" },
 ];
 
 const RC = { admin:"#2563EB", teacher:"#059669", student:"#7C3AED", parent:"#D97706" };
 const RB = { admin:"#EFF6FF", teacher:"#ECFDF5", student:"#F5F3FF", parent:"#FEF3C7" };
 const scoreColor = p => p>=80?"#059669":p>=60?"#D97706":"#EF4444";
+
+
+// ── ClassCard — shows advisor + multi-subject teachers ───────
+function ClassCard({ c, teachers, onDelete, onAssignTeacher, onAssignAdvisor, onAddSubject, onRemoveSubject }) {
+  const [addOpen,    setAddOpen]    = React.useState(false);
+  const [newTeacher, setNewTeacher] = React.useState("");
+  const [newSubject, setNewSubject] = React.useState("");
+  const SUBJECTS = ["Math","English","Arabic","Science","Social Studies","Islamic","Computer","Art","P.E","Karate","Music","High-Level","Other"];
+
+  return (
+    <div className="card">
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+        <div>
+          <div style={{fontWeight:800,fontSize:15,color:"#0F172A"}}>Class {c.name}</div>
+          <div style={{fontSize:12,color:"#64748B"}}>{c.grade_name} · {c.student_count||0} students</div>
+        </div>
+        <button className="btn danger" style={{fontSize:11,padding:"4px 8px"}} onClick={()=>onDelete(c.id)}>Delete</button>
+      </div>
+
+      {/* Grade Advisor */}
+      <div style={{marginBottom:10}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:4}}>⭐ Advisor (رائد الفصل)</div>
+        <select value={c.advisor||""} onChange={e=>onAssignAdvisor(c.id,e.target.value)}
+          style={{width:"100%",padding:"6px 10px",border:"1.5px solid #FDE68A",borderRadius:7,fontSize:12,background:"#FFFBEB",color:"#0F172A",outline:"none",fontFamily:"inherit"}}>
+          <option value="">— No Advisor —</option>
+          {teachers.map(t=><option key={t.id} value={t.id}>{t.full_name}{c.advisor===t.id?" ✓":""}</option>)}
+        </select>
+      </div>
+
+      {/* Subject Teachers */}
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:"#2563EB",marginBottom:5}}>👨‍🏫 Subject Teachers</div>
+        {(c.subject_teachers||[]).map(st=>(
+          <div key={st.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"4px 8px",background:"#EFF6FF",borderRadius:6,marginBottom:4,fontSize:12}}>
+            <span><b>{st.subject}</b> — {st.teacher_name}</span>
+            <button onClick={()=>onRemoveSubject(c.id,st.id)}
+              style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:14,lineHeight:1,padding:"0 2px"}}>✕</button>
+          </div>
+        ))}
+        {!addOpen ? (
+          <button onClick={()=>setAddOpen(true)}
+            style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px dashed #93C5FD",
+              background:"#EFF6FF",color:"#2563EB",cursor:"pointer",marginTop:4,fontFamily:"inherit"}}>
+            + Add Subject Teacher
+          </button>
+        ) : (
+          <div style={{background:"#F8FAFC",borderRadius:8,padding:"8px 10px",border:"1px solid #E2E8F0",marginTop:6}}>
+            <select value={newSubject} onChange={e=>setNewSubject(e.target.value)}
+              style={{width:"100%",padding:"5px 8px",borderRadius:6,border:"1.5px solid #E2E8F0",fontSize:12,marginBottom:5,fontFamily:"inherit",background:"#fff",color:"#0F172A"}}>
+              <option value="">— Subject —</option>
+              {SUBJECTS.map(s=><option key={s}>{s}</option>)}
+            </select>
+            <select value={newTeacher} onChange={e=>setNewTeacher(e.target.value)}
+              style={{width:"100%",padding:"5px 8px",borderRadius:6,border:"1.5px solid #E2E8F0",fontSize:12,marginBottom:5,fontFamily:"inherit",background:"#fff",color:"#0F172A"}}>
+              <option value="">— Teacher —</option>
+              {teachers.map(t=><option key={t.id} value={t.id}>{t.full_name}</option>)}
+            </select>
+            <div style={{display:"flex",gap:5}}>
+              <button onClick={()=>{onAddSubject(c.id,newTeacher,newSubject);setAddOpen(false);setNewTeacher("");setNewSubject("");}}
+                style={{flex:1,padding:"5px",borderRadius:6,border:"none",background:"#2563EB",color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+                Add
+              </button>
+              <button onClick={()=>setAddOpen(false)}
+                style={{padding:"5px 10px",borderRadius:6,border:"none",background:"#F1F5F9",color:"#64748B",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -63,6 +141,7 @@ export default function AdminDashboard() {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAn,     setLoadingAn]     = useState(false);
 
+  const [selTTClass, setSelTTClass] = useState(null);
   const [toast, setToast] = useState(null);
   const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
@@ -79,7 +158,13 @@ export default function AdminDashboard() {
     finally { setLoadingU(false); }
   }, [roleF, search]);
 
-  useEffect(()=>{ loadUsers(); },[loadUsers]);
+  // Debounce search — wait 500ms after user stops typing before API call
+  const searchTimer = useRef(null);
+  useEffect(()=>{
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(()=>{ loadUsers(); }, 500);
+    return () => clearTimeout(searchTimer.current);
+  },[loadUsers]);
 
   const loadGrades = useCallback(async () => {
     setLoadingG(true);
@@ -92,7 +177,8 @@ export default function AdminDashboard() {
   const loadUnassigned = useCallback(async () => { try { setUnassigned(await academicsAPI.unassignedStudents()); } catch {} },[]);
 
   useEffect(()=>{
-    if (tab==="academics") { loadGrades(); loadTeachers(); loadUnassigned(); }
+    if (tab==="academics" || tab==="timetable") { loadGrades(); }
+    if (tab==="academics") { loadTeachers(); loadUnassigned(); }
   },[tab, loadGrades, loadTeachers, loadUnassigned]);
 
   useEffect(()=>{
@@ -118,22 +204,8 @@ export default function AdminDashboard() {
 
   const loadParentChildren = useCallback(async (parentId) => {
     try {
-      const d = await usersAPI.list({ role:"student" }); // all students
-      // get children via parentAPI link endpoint check — use admin link-child GET if available
-      // fallback: filter from users who have this parent (we'll use the link endpoint)
-      // Actually fetch via parentAPI pattern — we call list then cross-ref
-      // Since there's no GET for a specific parent's children from admin side in api.js,
-      // we re-use the approach: try fetching with parentAPI indirectly
-      // Best approach: add a getParentChildren to usersAPI using the existing endpoint
-      const res = await fetch(`/api/auth/users/${parentId}/children/`, {
-        headers: { Authorization: "Bearer " + localStorage.getItem("access_token") }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setParentChildren(data.results || data);
-      } else {
-        setParentChildren([]);
-      }
+      const data = await parentAPI.adminParentChildren(parentId);
+      setParentChildren(Array.isArray(data) ? data : (data.results || []));
     } catch { setParentChildren([]); }
   },[]);
 
@@ -253,6 +325,22 @@ export default function AdminDashboard() {
 
   const handleAssignTeacher = async (classId, teacherId) => {
     try { const res=await academicsAPI.classes.assignTeacher(classId,teacherId); showToast(res.message); loadGrades(); }
+    catch { showToast("Failed","error"); }
+  };
+
+  const handleAssignAdvisor = async (classId, teacherId) => {
+    try { await academicsAPI.classes.assignAdvisor(classId, teacherId||null); showToast("Advisor updated!"); loadGrades(); }
+    catch { showToast("Failed to assign advisor","error"); }
+  };
+
+  const handleAddSubjectTeacher = async (classId, teacherId, subject) => {
+    if (!subject.trim()||!teacherId) { showToast("Select teacher and subject","error"); return; }
+    try { await academicsAPI.classes.addSubjectTeacher(classId, teacherId, subject); showToast("Teacher added!"); loadGrades(); }
+    catch(e) { showToast(e?.error||"Failed","error"); }
+  };
+
+  const handleRemoveSubjectTeacher = async (classId, stId) => {
+    try { await academicsAPI.classes.removeSubjectTeacher(classId, stId); showToast("Removed!"); loadGrades(); }
     catch { showToast("Failed","error"); }
   };
 
@@ -525,18 +613,12 @@ export default function AdminDashboard() {
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
                     {(selGrade?allClasses.filter(c=>c.grade===selGrade.id):allClasses).map(c=>(
-                      <div key={c.id} className="card">
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                          <div><div style={{fontWeight:800,fontSize:15,color:"#0F172A"}}>Class {c.name}</div><div style={{fontSize:12,color:"#64748B"}}>{c.grade_name} · {c.subject||"No subject"}</div></div>
-                          <button className="btn danger" style={{fontSize:11,padding:"4px 8px"}} onClick={()=>handleDeleteClass(c.id)}>Delete</button>
-                        </div>
-                        <div style={{fontSize:12,color:"#374151",marginBottom:8}}><span style={{fontWeight:600}}>Students:</span> {c.student_count||0}</div>
-                        <select defaultValue={c.teacher||""} onChange={e=>handleAssignTeacher(c.id,e.target.value)}
-                          style={{width:"100%",padding:"7px 10px",border:"1.5px solid #E2E8F0",borderRadius:8,fontSize:12,background:"#F8FAFC",color:"#0F172A",outline:"none",fontFamily:"'Sora',sans-serif"}}>
-                          <option value="">— Unassigned —</option>
-                          {teachers.map(t=><option key={t.id} value={t.id}>{t.full_name}</option>)}
-                        </select>
-                      </div>
+                      <ClassCard key={c.id} c={c} teachers={teachers}
+                        onDelete={handleDeleteClass}
+                        onAssignAdvisor={handleAssignAdvisor}
+                        onAddSubject={handleAddSubjectTeacher}
+                        onRemoveSubject={handleRemoveSubjectTeacher}
+                      />
                     ))}
                     {allClasses.length===0&&<div className="card" style={{textAlign:"center",color:"#94A3B8",gridColumn:"1/-1"}}>No classes yet.</div>}
                   </div>
@@ -862,6 +944,55 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
+
+          {/* ══ TIMETABLE ══ */}
+          {tab==="timetable"&&(
+            <div className="fade">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <h3 style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>📅 Timetable Management</h3>
+                <p style={{fontSize:12,color:"#64748B"}}>Select a class to view and edit its timetable</p>
+              </div>
+
+              {/* Load grades if not loaded */}
+              {grades.length===0&&(
+                <div style={{textAlign:"center",padding:40,color:"#94A3B8"}}>
+                  <p>Loading classes...</p>
+                </div>
+              )}
+
+              {/* Class selector buttons */}
+              {grades.length>0&&(
+                <>
+                  <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+                    {grades.flatMap(g=>(g.classes||[]).map(c=>({...c,grade_name:g.name}))).map(c=>(
+                      <button key={c.id} onClick={()=>setSelTTClass(c)}
+                        style={{padding:"7px 14px",borderRadius:9,fontSize:13,fontWeight:600,
+                          cursor:"pointer",fontFamily:"inherit",
+                          border:`1.5px solid ${selTTClass?.id===c.id?"#2563EB":"#E2E8F0"}`,
+                          background:selTTClass?.id===c.id?"#2563EB":"#F8FAFC",
+                          color:selTTClass?.id===c.id?"#fff":"#475569"}}>
+                        {c.grade_name} — Class {c.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {!selTTClass?(
+                    <div className="card" style={{textAlign:"center",padding:48,color:"#94A3B8"}}>
+                      <div style={{fontSize:40,marginBottom:10}}>📅</div>
+                      <p style={{fontSize:14}}>Select a class to manage its timetable</p>
+                    </div>
+                  ):(
+                    <AdminTimetableManager
+                      classId={selTTClass.id}
+                      className={selTTClass.name}
+                      accentColor="#2563EB"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
 
         </div>
       </div>

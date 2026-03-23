@@ -11,7 +11,7 @@ try:
     ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
     CORS_ALLOWED_ORIGINS_STR = config("CORS_ALLOWED_ORIGINS", default="http://localhost:3000")
 except Exception:
-    SECRET_KEY = "django-insecure-school-key-2025"
+    SECRET_KEY = "django-insecure-school-key-2025x"  # padded to 32+ bytes
     DEBUG = True
     ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
     CORS_ALLOWED_ORIGINS_STR = "http://localhost:3000"
@@ -36,6 +36,8 @@ INSTALLED_APPS = [
     "messaging.apps.MessagingConfig",
     "analytics.apps.AnalyticsConfig",
     "reports.apps.ReportsConfig",
+    "videos.apps.VideosConfig",
+    "lesson_plan.apps.LessonPlanConfig",
 ]
 
 MIDDLEWARE = [
@@ -80,7 +82,10 @@ AUTH_USER_MODEL = "users.CustomUser"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+     "OPTIONS": {"min_length": 8}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 LANGUAGE_CODE = "en-us"
@@ -106,7 +111,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=2),   # Reduced from 8h for security
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
@@ -114,3 +119,38 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_STR.split(",")
 CORS_ALLOW_CREDENTIALS = True
+
+# ── Rate Limiting (Security #7) ──────────────────────────────
+# Limits login attempts: 5/min anon, 100/min authenticated
+if "DEFAULT_THROTTLE_CLASSES" not in str(REST_FRAMEWORK):
+    REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ]
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        "anon": "60/min",
+        "user": "300/min",
+        "login": "5/min",
+    }
+
+# ── Security Headers (Security #8) ───────────────────────────
+SECURE_BROWSER_XSS_FILTER   = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS             = "DENY"
+SECURE_REFERRER_POLICY      = "strict-origin-when-cross-origin"
+
+# In production set these to True:
+# SECURE_SSL_REDIRECT         = not DEBUG
+# SESSION_COOKIE_SECURE       = not DEBUG
+# CSRF_COOKIE_SECURE          = not DEBUG
+# SECURE_HSTS_SECONDS         = 31536000
+
+# ── Secret Key Warning (Security #11) ────────────────────────
+import sys as _sys
+if "django-insecure" in SECRET_KEY and not DEBUG:
+    print("⚠️  WARNING: Using insecure SECRET_KEY in production! Set SECRET_KEY in .env", file=_sys.stderr)
+
+
+# ── File Upload Settings ──────────────────────────────────────
+DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB

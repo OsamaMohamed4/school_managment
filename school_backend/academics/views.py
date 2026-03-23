@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
-from .models import Grade, ClassRoom
-from .serializers import GradeSerializer, ClassRoomSerializer
+from .models import Grade, ClassRoom, ClassSubjectTeacher
+from .serializers import GradeSerializer, ClassRoomSerializer, SubjectTeacherSerializer
 from users.models import CustomUser, StudentProfile, TeacherProfile
 from users.permissions import IsAdmin, IsAdminOrReadOnly, IsTeacher
 
@@ -24,11 +24,28 @@ class ClassRoomViewSet(ModelViewSet):
     @action(detail=False, methods=["get"], url_path="my",
             permission_classes=[IsTeacher])
     def my_classes(self, request):
-        """Teacher: الـ classes اللي بيدرّسها"""
-        classes = ClassRoom.objects.filter(
+        """Teacher: كل الـ classes اللي بيدرّس فيها (سواء main teacher أو subject teacher)"""
+        from django.db.models import Q
+        # Classes where they are main teacher OR subject teacher
+        class_ids_as_subject = ClassSubjectTeacher.objects.filter(
             teacher=request.user
-        ).select_related("grade")
-        return Response(ClassRoomSerializer(classes, many=True).data)
+        ).values_list("class_room_id", flat=True)
+
+        classes = ClassRoom.objects.filter(
+            Q(teacher=request.user) | Q(id__in=class_ids_as_subject)
+        ).distinct().select_related("grade").prefetch_related("subject_teachers__teacher")
+
+        # Add the subject this teacher teaches in each class
+        result = []
+        for cls in classes:
+            data = ClassRoomSerializer(cls).data
+            # Find which subjects this teacher teaches in this class
+            my_subjects = ClassSubjectTeacher.objects.filter(
+                class_room=cls, teacher=request.user
+            ).values_list("subject", flat=True)
+            data["my_subjects"] = list(my_subjects)
+            result.append(data)
+        return Response(result)
 
     @action(detail=False, methods=["get"], url_path="mine")
     def my_class(self, request):
@@ -100,6 +117,72 @@ class ClassRoomViewSet(ModelViewSet):
             "class_room":   str(classroom),
             "teacher_name": teacher.get_full_name(),
         })
+
+
+    @action(detail=True, methods=["post"], url_path="add-subject-teacher",
+            permission_classes=[IsAdmin])
+    def add_subject_teacher(self, request, pk=None):
+        """Admin: إضافة مدرس لمادة معينة في الفصل"""
+        classroom  = self.get_object()
+        teacher_id = request.data.get("teacher_id")
+        subject    = request.data.get("subject", "").strip()
+
+        if not teacher_id or not subject:
+            return Response({"error": "teacher_id and subject are required."}, status=400)
+
+        teacher = get_object_or_404(CustomUser, pk=teacher_id, role="teacher")
+        obj, created = ClassSubjectTeacher.objects.get_or_create(
+            class_room=classroom,
+            teacher=teacher,
+            subject=subject,
+        )
+        if not created:
+            return Response({"message": "Already assigned."})
+        return Response({
+            "message": f"{teacher.get_full_name()} assigned to teach {subject} in {classroom.name}",
+            "id": obj.id,
+        }, status=201)
+
+    @action(detail=True, methods=["delete"], url_path="remove-subject-teacher",
+            permission_classes=[IsAdmin])
+    def remove_subject_teacher(self, request, pk=None):
+        """Admin: إزالة مدرس من مادة في الفصل"""
+        classroom       = self.get_object()
+        subject_teacher_id = request.data.get("id")
+        if not subject_teacher_id:
+            return Response({"error": "id required."}, status=400)
+        obj = get_object_or_404(ClassSubjectTeacher, pk=subject_teacher_id, class_room=classroom)
+        obj.delete()
+        return Response({"message": "Removed."})
+
+    @action(detail=True, methods=["get"], url_path="subject-teachers",
+            permission_classes=[IsAdmin])
+    def get_subject_teachers(self, request, pk=None):
+        """Admin: قائمة مدرسي المواد في الفصل"""
+        classroom = self.get_object()
+        sts = ClassSubjectTeacher.objects.filter(
+            class_room=classroom
+        ).select_related("teacher")
+        return Response(SubjectTeacherSerializer(sts, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="assign-advisor",
+            permission_classes=[IsAdmin])
+    def assign_advisor(self, request, pk=None):
+        """Admin: تعيين Grade Advisor (رائد الفصل) لـ class"""
+        classroom  = self.get_object()
+        teacher_id = request.data.get("teacher_id")
+        if teacher_id:
+            advisor = get_object_or_404(CustomUser, pk=teacher_id, role="teacher")
+            classroom.advisor = advisor
+            classroom.save()
+            return Response({
+                "message":      f"{advisor.get_full_name()} assigned as advisor for {classroom.name}",
+                "advisor_name": advisor.get_full_name(),
+            })
+        else:
+            classroom.advisor = None
+            classroom.save()
+            return Response({"message": f"Advisor removed from {classroom.name}"})
 
 
 class TeachersListView(APIView):

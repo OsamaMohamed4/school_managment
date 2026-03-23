@@ -25,7 +25,12 @@ class Submission(models.Model):
     assignment  = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="submissions")
     student     = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                     related_name="submissions", limit_choices_to={"role":"student"})
-    text        = models.TextField(blank=True)
+    text        = models.TextField(blank=True, help_text="Written answer (optional if file uploaded)")
+    file        = models.FileField(
+        upload_to="submissions/%Y/%m/",
+        null=True, blank=True,
+        help_text="Uploaded file (PDF, Word, image) — max 50MB"
+    )
     score       = models.PositiveSmallIntegerField(null=True, blank=True)
     feedback    = models.TextField(blank=True)
     status      = models.CharField(max_length=10, choices=STATUS_CHOICES, default="submitted")

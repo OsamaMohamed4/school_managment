@@ -1,7 +1,7 @@
 from django.db import models
 from academics.models import ClassRoom
 
-DAYS = [("mon","Monday"),("tue","Tuesday"),("wed","Wednesday"),
+DAYS = [("sun","Sunday"),("mon","Monday"),("tue","Tuesday"),("wed","Wednesday"),
         ("thu","Thursday"),("fri","Friday"),("sat","Saturday")]
 
 class TimetableSlot(models.Model):

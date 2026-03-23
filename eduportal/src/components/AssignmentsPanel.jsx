@@ -11,6 +11,7 @@ export default function AssignmentsPanel({ accentColor="#059669", accentBg="#ECF
   const [view,        setView]        = useState("list"); // list | detail | new | grade
   const [classes,     setClasses]     = useState([]);
   const [submitText,  setSubmitText]  = useState("");
+  const [submitFile,  setSubmitFile]  = useState(null);
   const [grading,     setGrading]     = useState({score:"",feedback:""});
   const [gradingSub,  setGradingSub]  = useState(null);
   const [loading,     setLoading]     = useState(false);
@@ -18,6 +19,22 @@ export default function AssignmentsPanel({ accentColor="#059669", accentBg="#ECF
   const [toast,       setToast]       = useState(null);
 
   const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
+
+  const downloadFile = async (url, filename) => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const res   = await fetch(url, { headers: token ? { Authorization: "Bearer "+token } : {} });
+      const blob  = await res.blob();
+      const a     = document.createElement("a");
+      a.href      = URL.createObjectURL(blob);
+      a.download  = filename || "download";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    } catch { showToast("Download failed","error"); }
+  };
+
 
   const load = async()=>{
     setLoading(true);
@@ -47,10 +64,12 @@ export default function AssignmentsPanel({ accentColor="#059669", accentBg="#ECF
   };
 
   const handleSubmit = async()=>{
-    if (!submitText.trim()){showToast("Write your answer","error");return;}
+    if (!submitText.trim() && !submitFile){showToast("Write an answer or upload a file","error");return;}
+    if (submitFile && submitFile.size > 50*1024*1024){showToast("File too large — max 50MB","error");return;}
     try {
-      await assignmentsAPI.submit(selAsgn.id, submitText);
-      showToast("Submitted!"); setSubmitText(""); load(); setView("list");
+      await assignmentsAPI.submit(selAsgn.id, submitText, submitFile);
+      showToast("Submitted! ✓");
+      setSubmitText(""); setSubmitFile(null); load(); setView("list");
     } catch(e){ showToast(e?.error||"Failed","error"); }
   };
 
@@ -153,16 +172,50 @@ export default function AssignmentsPanel({ accentColor="#059669", accentBg="#ECF
           {!isTeacher&&!selAsgn.my_submission&&(
             <div style={{background:"#fff",borderRadius:14,padding:20,border:"1.5px solid #E2E8F0",marginBottom:14}}>
               <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Your Submission</h4>
-              <textarea className="asgn-inp" rows={5} placeholder="Write your answer here..." value={submitText} onChange={e=>setSubmitText(e.target.value)} style={{resize:"vertical",marginBottom:10}}/>
-              <button className="asgn-btn" style={{background:accentColor,color:"#fff",padding:"10px 20px"}} onClick={handleSubmit}>Submit</button>
+              <textarea className="asgn-inp" rows={4} placeholder="Write your answer here... (optional if uploading a file)"
+                value={submitText} onChange={e=>setSubmitText(e.target.value)} style={{resize:"vertical",marginBottom:10}}/>
+              {/* File Upload */}
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:6}}>
+                  📎 Attach File <span style={{color:"#94A3B8",fontWeight:400}}>(PDF, Word, image — max 50MB)</span>
+                </label>
+                <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
+                  onChange={e=>setSubmitFile(e.target.files[0]||null)}
+                  style={{display:"none"}} id="sub-file-input"/>
+                <label htmlFor="sub-file-input" style={{
+                  display:"inline-flex",alignItems:"center",gap:7,padding:"8px 14px",
+                  borderRadius:8,border:`1.5px dashed ${accentColor}`,background:accentBg,
+                  color:accentColor,fontWeight:600,fontSize:12,cursor:"pointer"
+                }}>
+                  {submitFile ? `✓ ${submitFile.name}` : "Choose File"}
+                </label>
+                {submitFile&&(
+                  <button onClick={()=>setSubmitFile(null)}
+                    style={{marginLeft:8,background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                    ✕ Remove
+                  </button>
+                )}
+                {submitFile&&(
+                  <div style={{fontSize:11,color:"#64748B",marginTop:4}}>
+                    Size: {(submitFile.size/1024/1024).toFixed(1)}MB
+                    {submitFile.size > 50*1024*1024 && <span style={{color:"#EF4444",fontWeight:700}}> — TOO LARGE!</span>}
+                  </div>
+                )}
+              </div>
+              <button className="asgn-btn" style={{background:accentColor,color:"#fff",padding:"10px 20px"}} onClick={handleSubmit}>
+                Submit Assignment
+              </button>
             </div>
           )}
           {!isTeacher&&selAsgn.my_submission&&(
             <div style={{background:"#ECFDF5",border:"1.5px solid #A7F3D0",borderRadius:12,padding:16,marginBottom:14}}>
               <div style={{fontWeight:700,color:"#059669",marginBottom:6}}>✓ Already Submitted</div>
-              <p style={{fontSize:13,color:"#374151",marginBottom:6}}>{selAsgn.my_submission.text}</p>
+              {selAsgn.my_submission.text&&<p style={{fontSize:13,color:"#374151",marginBottom:6}}>{selAsgn.my_submission.text}</p>}
+              {selAsgn.my_submission.file_url&&(
+                <button onClick={()=>downloadFile(selAsgn.my_submission.file_url, selAsgn.my_submission.file_name)} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,color:accentColor,fontWeight:600,marginBottom:8,background:accentBg,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontFamily:"inherit"}}>⬇️ {selAsgn.my_submission.file_name||"Download File"}</button>
+              )}
               {selAsgn.my_submission.score!=null&&<div style={{fontSize:13,fontWeight:700,color:scoreColor(selAsgn.my_submission.score/selAsgn.max_score*100)}}>Score: {selAsgn.my_submission.score}/{selAsgn.max_score}</div>}
-              {selAsgn.my_submission.feedback&&<div style={{fontSize:12,color:"#64748B",marginTop:4}}>Feedback: {selAsgn.my_submission.feedback}</div>}
+              {selAsgn.my_submission.feedback&&<div style={{fontSize:12,color:"#64748B",marginTop:4}}>💬 {selAsgn.my_submission.feedback}</div>}
             </div>
           )}
 
@@ -180,7 +233,13 @@ export default function AssignmentsPanel({ accentColor="#059669", accentBg="#ECF
                     </div>
                     {s.score!=null&&<span style={{fontWeight:700,color:scoreColor(s.score/selAsgn.max_score*100)}}>{s.score}/{selAsgn.max_score}</span>}
                   </div>
-                  <p style={{fontSize:12,color:"#374151",marginBottom:8,background:"#F8FAFC",padding:"8px 10px",borderRadius:7}}>{s.text}</p>
+                  {s.text&&<p style={{fontSize:12,color:"#374151",marginBottom:6,background:"#F8FAFC",padding:"8px 10px",borderRadius:7}}>{s.text}</p>}
+                  {s.file_url&&(
+                    <a href={s.file_url} target="_blank" rel="noreferrer"
+                      style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,color:accentColor,fontWeight:600,marginBottom:8,textDecoration:"none",background:accentBg,padding:"5px 10px",borderRadius:7}}>
+                      📎 Download: {s.file_name||"Attachment"}
+                    </a>
+                  )}
                   {gradingSub===s.id?(
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
                       <input className="asgn-inp" type="number" placeholder="Score" style={{width:80}} value={grading.score} onChange={e=>setGrading(g=>({...g,score:e.target.value}))}/>

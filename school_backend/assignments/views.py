@@ -6,6 +6,14 @@ from .models import Assignment, Submission
 from .serializers import AssignmentSerializer, SubmissionSerializer
 from academics.models import ClassRoom
 
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+ALLOWED_TYPES   = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg","image/png","image/gif","image/webp","text/plain",
+]
+
 
 class AssignmentListCreateView(APIView):
     def get(self, request):
@@ -46,52 +54,62 @@ class AssignmentDetailView(APIView):
 
 
 class SubmitAssignmentView(APIView):
-    """Student submits an assignment"""
+    """Student submits — text and/or file (max 50MB)"""
     def post(self, request, pk):
         if request.user.role != "student":
             return Response({"error":"Students only."}, status=403)
         assignment = get_object_or_404(Assignment, pk=pk)
-        text = request.data.get("text","").strip()
-        if not text:
-            return Response({"error":"Submission text required."}, status=400)
         if Submission.objects.filter(assignment=assignment, student=request.user).exists():
             return Response({"error":"Already submitted."}, status=400)
-        status = "late" if timezone.now() > assignment.due_date else "submitted"
-        sub = Submission.objects.create(assignment=assignment, student=request.user, text=text, status=status)
-        return Response(SubmissionSerializer(sub).data, status=201)
+
+        text = request.data.get("text","").strip()
+        file = request.FILES.get("file")
+
+        if not text and not file:
+            return Response({"error":"Submit text or attach a file."}, status=400)
+
+        if file:
+            if file.size > MAX_UPLOAD_SIZE:
+                return Response({"error":f"File too large. Max 50MB (yours: {round(file.size/1024/1024,1)}MB)"}, status=400)
+            ct = getattr(file,"content_type","")
+            if ct and ct not in ALLOWED_TYPES:
+                return Response({"error":"File type not allowed. Use PDF, Word, or image."}, status=400)
+
+        sub_status = "late" if timezone.now() > assignment.due_date else "submitted"
+        sub = Submission.objects.create(
+            assignment=assignment, student=request.user,
+            text=text, file=file, status=sub_status,
+        )
+        return Response(SubmissionSerializer(sub, context={"request":request}).data, status=201)
 
 
 class GradeSubmissionView(APIView):
-    """Teacher grades a submission"""
     def patch(self, request, sub_id):
         sub = get_object_or_404(Submission, pk=sub_id)
         if request.user.role not in ("teacher","admin"):
             return Response({"error":"Permission denied."}, status=403)
-        score    = request.data.get("score")
-        feedback = request.data.get("feedback","")
+        score = request.data.get("score")
         if score is not None:
             sub.score    = score
-            sub.feedback = feedback
+            sub.feedback = request.data.get("feedback","")
             sub.status   = "graded"
             sub.save()
-        return Response(SubmissionSerializer(sub).data)
+        return Response(SubmissionSerializer(sub, context={"request":request}).data)
 
 
 class AssignmentSubmissionsView(APIView):
-    """Teacher: see all submissions for an assignment"""
     def get(self, request, pk):
         assignment = get_object_or_404(Assignment, pk=pk)
         if request.user.role not in ("teacher","admin"):
             return Response({"error":"Permission denied."}, status=403)
         subs = assignment.submissions.select_related("student")
         return Response({
-            "assignment": AssignmentSerializer(assignment, context={"request":request}).data,
-            "submissions": SubmissionSerializer(subs, many=True).data,
+            "assignment":  AssignmentSerializer(assignment, context={"request":request}).data,
+            "submissions": SubmissionSerializer(subs, many=True, context={"request":request}).data,
         })
 
 
 class MySubmissionsView(APIView):
-    """Student: all their submissions"""
     def get(self, request):
         subs = Submission.objects.filter(student=request.user).select_related("assignment")
-        return Response(SubmissionSerializer(subs, many=True).data)
+        return Response(SubmissionSerializer(subs, many=True, context={"request":request}).data)

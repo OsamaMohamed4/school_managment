@@ -70,7 +70,10 @@ export const academicsAPI = {
     students:(id)=>request("/classes/"+id+"/students/"),
     assignStudent:(id,sid)=>request("/classes/"+id+"/assign-student/",{method:"POST",body:JSON.stringify({student_id:sid})}),
     removeStudent:(id,sid)=>request("/classes/"+id+"/remove-student/",{method:"POST",body:JSON.stringify({student_id:sid})}),
-    assignTeacher:(id,tid)=>request("/classes/"+id+"/assign-teacher/",{method:"POST",body:JSON.stringify({teacher_id:tid})}),
+    assignTeacher:       (id,tid)     => request("/classes/"+id+"/assign-teacher/",        {method:"POST",   body:JSON.stringify({teacher_id:tid})}),
+    assignAdvisor:       (id,tid)     => request("/classes/"+id+"/assign-advisor/",        {method:"POST",   body:JSON.stringify({teacher_id:tid||null})}),
+    addSubjectTeacher:   (id,tid,sub) => request("/classes/"+id+"/add-subject-teacher/",   {method:"POST",   body:JSON.stringify({teacher_id:tid,subject:sub})}),
+    removeSubjectTeacher:(id,stId)    => request("/classes/"+id+"/remove-subject-teacher/",{method:"DELETE", body:JSON.stringify({id:stId})}),
   },
   teachers:()=>request("/teachers/list/"),
   unassignedStudents:()=>request("/students/unassigned/"),
@@ -113,11 +116,15 @@ export const parentAPI = {
   childDetail:(id)=>request("/auth/parent/child/"+id+"/"),
   linkChild:(parent_id,child_id)=>request("/auth/parent/link-child/",{method:"POST",body:JSON.stringify({parent_id,child_id})}),
   unlinkChild:(parent_id,child_id)=>request("/auth/parent/link-child/",{method:"DELETE",body:JSON.stringify({parent_id,child_id})}),
+  // Admin: get children of a specific parent
+  adminParentChildren:(parent_id)=>request("/auth/admin/parent/"+parent_id+"/children/"),
 };
 
 export const timetableAPI = {
   get:       (classId)   => request("/timetable/"+classId+"/"),
   my:        ()          => request("/timetable/my/"),
+  myTeacher:    ()        => request("/timetable/teacher/"),
+  classTeachers:(classId)  => request("/timetable/"+classId+"/teachers/"),
   addSlot:   (classId,d) => request("/timetable/"+classId+"/",{method:"POST",body:JSON.stringify(d)}),
   deleteSlot:(slotId)    => request("/timetable/slot/"+slotId+"/",{method:"DELETE"}),
 };
@@ -126,7 +133,21 @@ export const assignmentsAPI = {
   list:         ()            => request("/assignments/"),
   create:       (d)           => request("/assignments/",{method:"POST",body:JSON.stringify(d)}),
   delete:       (id)          => request("/assignments/"+id+"/",{method:"DELETE"}),
-  submit:       (id,text)     => request("/assignments/"+id+"/submit/",{method:"POST",body:JSON.stringify({text})}),
+  submit: (id, text, file) => {
+    if (file) {
+      // File upload — use FormData (multipart)
+      const fd = new FormData();
+      if (text) fd.append("text", text);
+      fd.append("file", file);
+      const token = getToken();
+      return fetch((process.env.REACT_APP_API_URL||"http://localhost:8000")+"/api/assignments/"+id+"/submit/", {
+        method: "POST",
+        headers: token ? { Authorization: "Bearer "+token } : {},
+        body: fd,
+      }).then(r => r.json());
+    }
+    return request("/assignments/"+id+"/submit/", {method:"POST", body:JSON.stringify({text})});
+  },
   submissions:  (id)          => request("/assignments/"+id+"/submissions/"),
   grade:        (subId,score,feedback) => request("/assignments/submissions/"+subId+"/grade/",{method:"PATCH",body:JSON.stringify({score,feedback})}),
   mySubmissions:()            => request("/assignments/my-submissions/"),
@@ -174,4 +195,36 @@ export const reportsAPI = {
     a.click();
     window.URL.revokeObjectURL(url);
   },
+};
+
+export const lessonPlanAPI = {
+  list:          ()          => request("/lesson-plans/"),
+  get:           (id)        => request("/lesson-plans/"+id+"/"),
+  create:        (d)         => request("/lesson-plans/",         {method:"POST", body:JSON.stringify(d)}),
+  update:        (id, notes) => request("/lesson-plans/"+id+"/",  {method:"PATCH",body:JSON.stringify({notes})}),
+  delete:        (id)        => request("/lesson-plans/"+id+"/",  {method:"DELETE"}),
+  addEntry:      (id, entry) => request("/lesson-plans/"+id+"/entries/", {method:"POST", body:JSON.stringify(entry)}),
+  deleteEntry:   (id, entry_id) => request("/lesson-plans/"+id+"/entries/", {method:"DELETE",body:JSON.stringify({entry_id})}),
+  myClassPlan:   ()          => request("/lesson-plans/my-class/"),
+  isAdvisor:     ()          => request("/lesson-plans/is-advisor/"),
+};
+
+export const videosAPI = {
+  list: () => request("/videos/"),
+
+  upload: (formData) => {
+    const token = getToken();
+    const base  = (process.env.REACT_APP_API_URL||"http://localhost:8000").replace(/\/$/, "");
+    return fetch(base + "/api/videos/", {
+      method:  "POST",
+      headers: token ? { Authorization: "Bearer " + token } : {},
+      body:    formData,  // FormData — no Content-Type header (browser sets it with boundary)
+    }).then(async r => {
+      const d = await r.json();
+      if (!r.ok) throw d;
+      return d;
+    });
+  },
+
+  delete: (id) => request("/videos/" + id + "/", { method: "DELETE" }),
 };

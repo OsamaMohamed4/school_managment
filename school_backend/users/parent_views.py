@@ -68,8 +68,8 @@ class ParentChildDetailView(APIView):
         att_rate    = round(pres/att_all.count()*100,1) if att_all.count() else 0
 
         # Quizzes
-        attempts = QuizAttempt.objects.filter(student=child).select_related("quiz").order_by("-completed_at")
-        quizzes  = [{"quiz_title":a.quiz.title,"score":a.score,"total":a.total_questions,"percentage":a.percentage,"date":str(a.completed_at)[:10]} for a in attempts]
+        attempts = QuizAttempt.objects.filter(student=child).select_related("quiz").order_by("-submitted_at")
+        quizzes  = [{"quiz_title":a.quiz.title,"score":a.score,"total_points":a.total_points,"percentage":a.percentage,"date":str(a.submitted_at)[:10]} for a in attempts]
         quiz_avg = round(sum(a.percentage for a in attempts)/attempts.count(),1) if attempts.count() else 0
 
         # Assignments
