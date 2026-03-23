@@ -12,8 +12,8 @@ try:
     CORS_ALLOWED_ORIGINS_STR = config("CORS_ALLOWED_ORIGINS", default="http://localhost:3000")
 except Exception:
     SECRET_KEY = "django-insecure-school-key-2025x"  # padded to 32+ bytes
-    DEBUG = True
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+    DEBUG = False
+    ALLOWED_HOSTS = ["*"]
     CORS_ALLOWED_ORIGINS_STR = "http://localhost:3000"
 
 INSTALLED_APPS = [
@@ -94,6 +94,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -117,7 +118,7 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_STR.split(",")
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 # ── Rate Limiting (Security #7) ──────────────────────────────
