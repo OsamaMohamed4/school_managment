@@ -7,12 +7,6 @@ from .serializers import AssignmentSerializer, SubmissionSerializer
 from academics.models import ClassRoom
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
-ALLOWED_TYPES   = [
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "image/jpeg","image/png","image/gif","image/webp","text/plain",
-]
 
 
 class AssignmentListCreateView(APIView):
@@ -43,6 +37,15 @@ class AssignmentListCreateView(APIView):
 class AssignmentDetailView(APIView):
     def get(self, request, pk):
         a = get_object_or_404(Assignment, pk=pk)
+        
+        # Check permissions
+        if request.user.role == "student":
+            sp = getattr(request.user, "student_profile", None)
+            if not sp or sp.class_room_id != a.class_room_id:
+                return Response({"error": "Permission denied."}, status=403)
+        elif request.user.role == "teacher" and a.teacher_id != request.user.id:
+            return Response({"error": "Permission denied."}, status=403)
+            
         return Response(AssignmentSerializer(a, context={"request":request}).data)
 
     def delete(self, request, pk):
@@ -59,6 +62,11 @@ class SubmitAssignmentView(APIView):
         if request.user.role != "student":
             return Response({"error":"Students only."}, status=403)
         assignment = get_object_or_404(Assignment, pk=pk)
+        
+        sp = getattr(request.user, "student_profile", None)
+        if not sp or sp.class_room_id != assignment.class_room_id:
+            return Response({"error": "This assignment is not for your class."}, status=403)
+            
         if Submission.objects.filter(assignment=assignment, student=request.user).exists():
             return Response({"error":"Already submitted."}, status=400)
 
@@ -71,9 +79,6 @@ class SubmitAssignmentView(APIView):
         if file:
             if file.size > MAX_UPLOAD_SIZE:
                 return Response({"error":f"File too large. Max 50MB (yours: {round(file.size/1024/1024,1)}MB)"}, status=400)
-            ct = getattr(file,"content_type","")
-            if ct and ct not in ALLOWED_TYPES:
-                return Response({"error":"File type not allowed. Use PDF, Word, or image."}, status=400)
 
         sub_status = "late" if timezone.now() > assignment.due_date else "submitted"
         sub = Submission.objects.create(
@@ -88,6 +93,10 @@ class GradeSubmissionView(APIView):
         sub = get_object_or_404(Submission, pk=sub_id)
         if request.user.role not in ("teacher","admin"):
             return Response({"error":"Permission denied."}, status=403)
+            
+        if request.user.role == "teacher" and sub.assignment.teacher_id != request.user.id:
+            return Response({"error": "You did not create this assignment."}, status=403)
+            
         score = request.data.get("score")
         if score is not None:
             sub.score    = score
@@ -102,6 +111,10 @@ class AssignmentSubmissionsView(APIView):
         assignment = get_object_or_404(Assignment, pk=pk)
         if request.user.role not in ("teacher","admin"):
             return Response({"error":"Permission denied."}, status=403)
+            
+        if request.user.role == "teacher" and assignment.teacher_id != request.user.id:
+            return Response({"error": "You did not create this assignment."}, status=403)
+            
         subs = assignment.submissions.select_related("student")
         return Response({
             "assignment":  AssignmentSerializer(assignment, context={"request":request}).data,

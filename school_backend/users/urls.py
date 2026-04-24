@@ -4,7 +4,7 @@ from rest_framework.routers import SimpleRouter
 from .views import (
     LoginView, MeView, UserViewSet, AdminParentChildrenView,
     ProfileView, ChangePasswordView,
-    ParentChildrenView, ParentChildDetailView, ParentLinkChildView,
+    ParentChildrenView, ParentChildDetailView, ParentLinkChildView, UsersStatsView,
 )
 
 router = SimpleRouter()
@@ -20,5 +20,6 @@ urlpatterns = [
     path("auth/parent/child/<int:child_id>/", ParentChildDetailView.as_view(), name="parent-child-detail"),
     path("auth/parent/link-child/",           ParentLinkChildView.as_view(),   name="parent-link-child"),
     path("auth/admin/parent/<int:parent_id>/children/", AdminParentChildrenView.as_view(), name="admin-parent-children"),
+    path("stats/", UsersStatsView.as_view(), name="users-stats"),
     path("", include(router.urls)),
 ]

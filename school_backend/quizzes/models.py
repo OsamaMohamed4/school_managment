@@ -68,7 +68,7 @@ class QuizAttempt(models.Model):
     quiz            = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
     score           = models.FloatField(null=True, blank=True)
     total_points    = models.PositiveIntegerField(default=0)
-    submitted_at    = models.DateTimeField(auto_now_add=True)
+    submitted_at    = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         unique_together = ["student", "quiz"]

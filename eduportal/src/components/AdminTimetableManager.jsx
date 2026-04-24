@@ -221,7 +221,7 @@ export default function AdminTimetableManager({ classId, className, accentColor=
                 onChange={e=>setNewSlot(s=>({...s,teacher_name:e.target.value}))}>
                 <option value="">— Select Teacher —</option>
                 {teachers.length === 0 ? (
-                  <option disabled value="">⚠️ No teachers assigned to this class</option>
+                  <option disabled value="">No teachers assigned to this class</option>
                 ) : teachers.map(t=>(
                   <option key={t.id} value={t.full_name}>{t.full_name} ({t.subject})</option>
                 ))}

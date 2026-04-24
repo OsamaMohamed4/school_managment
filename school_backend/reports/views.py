@@ -26,9 +26,14 @@ def make_pdf_bytes(html_content):
     except ImportError:
         return None, None, False
 
+from users.permissions import IsAdminOrTeacher
+from django.db.models import Avg, Count, Q
+from academics.models import ClassSubjectTeacher, ClassRoom
+
 
 class StudentReportCardView(APIView):
     """GET /api/reports/student/<id>/pdf/"""
+    
     def get(self, request, student_id):
         student = CustomUser.objects.filter(pk=student_id, role="student").first()
         if not student:
@@ -37,12 +42,28 @@ class StudentReportCardView(APIView):
         sp  = getattr(student, "student_profile", None)
         cls = sp.class_room if sp else None
 
+        # Verify permission
+        if request.user.role == "student" and request.user.id != student.id:
+            return Response({"error": "Permission denied."}, status=403)
+        elif request.user.role == "parent":
+            from users.models import ParentProfile
+            profile = ParentProfile.objects.filter(user=request.user).first()
+            if not profile or student not in profile.children.all():
+                return Response({"error": "Permission denied."}, status=403)
+        elif request.user.role == "teacher":
+            if cls:
+                is_main = cls.teacher_id == request.user.id
+                is_subject = ClassSubjectTeacher.objects.filter(class_room=cls, teacher=request.user).exists()
+                if not (is_main or is_subject):
+                    return Response({"error": "Permission denied."}, status=403)
+
         att_all  = AttendanceRecord.objects.filter(student=student)
         present  = att_all.filter(status="present").count()
         att_rate = round(present/att_all.count()*100,1) if att_all.count() else 0
 
         attempts = QuizAttempt.objects.filter(student=student).select_related("quiz")
-        quiz_avg = round(sum(a.percentage for a in attempts)/attempts.count(),1) if attempts.count() else 0
+        agg = attempts.aggregate(avg=Avg("percentage"))
+        quiz_avg = round(agg["avg"], 1) if agg["avg"] is not None else 0
 
         try:
             from reportlab.lib.pagesizes import A4
@@ -139,11 +160,18 @@ class StudentReportCardView(APIView):
 
 class ClassAttendanceReportView(APIView):
     """GET /api/reports/class/<id>/attendance/pdf/"""
+    permission_classes = [IsAdminOrTeacher]
+
     def get(self, request, class_id):
-        from academics.models import ClassRoom
         cls = ClassRoom.objects.filter(pk=class_id).first()
         if not cls:
             return Response({"error": "Class not found."}, status=404)
+
+        if request.user.role == "teacher":
+            is_main = cls.teacher_id == request.user.id
+            is_subject = ClassSubjectTeacher.objects.filter(class_room=cls, teacher=request.user).exists()
+            if not (is_main or is_subject):
+                return Response({"error": "Permission denied."}, status=403)
 
         students = CustomUser.objects.filter(student_profile__class_room=cls, is_active=True)
 
@@ -163,14 +191,24 @@ class ClassAttendanceReportView(APIView):
             story.append(Paragraph(f"Grade: {cls.grade.name}  |  Teacher: {cls.teacher.get_full_name() if cls.teacher else '—'}  |  Date: {timezone.now().strftime('%Y-%m-%d')}", ParagraphStyle("info", parent=styles["Normal"], fontSize=10, spaceAfter=10)))
 
             table_data = [["Student", "Present", "Absent", "Late", "Total", "Rate"]]
+            
+            student_stats = AttendanceRecord.objects.filter(
+                class_room=cls
+            ).values("student__id", "student__first_name", "student__last_name").annotate(
+                total=Count("id"),
+                pres=Count("id", filter=Q(status="present")),
+                abs_=Count("id", filter=Q(status="absent")),
+                late=Count("id", filter=Q(status="late")),
+            )
+
+            stats_dict = {stat["student__id"]: stat for stat in student_stats}
+
             for s in students:
-                att   = AttendanceRecord.objects.filter(student=s)
-                pres  = att.filter(status="present").count()
-                abs_  = att.filter(status="absent").count()
-                late  = att.filter(status="late").count()
-                total = att.count()
-                rate  = round(pres/total*100,1) if total else 0
-                table_data.append([s.get_full_name(), str(pres), str(abs_), str(late), str(total), f"{rate}%"])
+                stat = stats_dict.get(s.id, {"pres": 0, "abs_": 0, "late": 0, "total": 0})
+                pres = stat["pres"]
+                total = stat["total"]
+                rate = round(pres/total*100, 1) if total else 0
+                table_data.append([s.get_full_name(), str(pres), str(stat["abs_"]), str(stat["late"]), str(total), f"{rate}%"])
 
             t = Table(table_data, colWidths=[7*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm])
             t.setStyle(TableStyle([

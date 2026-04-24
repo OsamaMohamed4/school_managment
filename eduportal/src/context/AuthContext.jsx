@@ -16,10 +16,9 @@ export function AuthProvider({ children }) {
     const data = await authAPI.login(email, password);
     // authAPI.login already saves tokens + user to localStorage
 
-    // ✅ Validate that the user's role matches what they selected
     if (data.user.role !== role) {
       clearAuth(); // remove the tokens we just saved
-      throw { detail: `This account is not a ${role} account. Please select the correct role.` };
+      throw new Error(`This account is not a ${role} account. Please select the correct role.`);
     }
 
     setUser(data.user);
@@ -31,8 +30,13 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const updateUser = (updatedUser) => {
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+    setUser(updatedUser);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

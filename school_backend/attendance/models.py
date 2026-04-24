@@ -8,8 +8,8 @@ class AttendanceRecord(models.Model):
     student    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="attendance_records", limit_choices_to={"role": "student"})
     class_room = models.ForeignKey("academics.ClassRoom", on_delete=models.CASCADE, related_name="attendance_records")
     teacher    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="marked_attendance", limit_choices_to={"role": "teacher"})
-    date       = models.DateField()
-    status     = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    date       = models.DateField(db_index=True)
+    status     = models.CharField(max_length=10, choices=STATUS_CHOICES, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

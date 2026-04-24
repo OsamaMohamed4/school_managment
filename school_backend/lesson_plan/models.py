@@ -17,7 +17,7 @@ class WeeklyPlan(models.Model):
     """One weekly plan per class per week"""
     class_room  = models.ForeignKey(ClassRoom, on_delete=models.CASCADE,
                     related_name="weekly_plans")
-    advisor     = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+    created_by  = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                     related_name="created_plans", limit_choices_to={"role": "teacher"})
     week_start  = models.DateField(help_text="Date of the first day of the week (Sunday)")
     week_end    = models.DateField(help_text="Date of the last day of the week (Thursday)")

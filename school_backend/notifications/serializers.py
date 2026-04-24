@@ -8,7 +8,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Notification
         fields = ["id","sender","sender_name","recipient","title",
-                  "message","notif_type","is_read","created_at"]
+                  "message","file","notif_type","is_read","created_at"]
         read_only_fields = ["id","sender","created_at","is_read"]
 
     def get_sender_name(self, obj):

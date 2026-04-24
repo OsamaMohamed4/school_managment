@@ -1,9 +1,9 @@
 const BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
 const API  = BASE + "/api";
 
-export const getToken  = () => localStorage.getItem("access_token");
+export const getToken  = () => localStorage.getItem("token") || localStorage.getItem("access_token");
 export const getUser   = () => { try { const u = localStorage.getItem("user"); return u ? JSON.parse(u) : null; } catch { return null; } };
-export const clearAuth = () => ["access_token","refresh_token","role","user"].forEach(k => localStorage.removeItem(k));
+export const clearAuth = () => ["token","access_token","refresh_token","role","user"].forEach(k => localStorage.removeItem(k));
 
 let _refreshing = false;
 
@@ -20,7 +20,9 @@ const request = async (path, opts = {}, _retry = false) => {
       try {
         const r = await fetch(API+"/auth/refresh/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({refresh})});
         if (r.ok) {
-          localStorage.setItem("access_token",(await r.json()).access);
+          const newTokens = await r.json();
+          localStorage.setItem("access_token", newTokens.access);
+          localStorage.setItem("token", newTokens.access);
           _refreshing = false;
           return request(path, opts, true); // retry ONCE
         }
@@ -44,6 +46,7 @@ export const authAPI = {
   login: async (email,password) => {
     const data = await request("/auth/login/",{method:"POST",body:JSON.stringify({email,password})});
     localStorage.setItem("access_token", data.access);
+    localStorage.setItem("token", data.access); // Support 'token' as requested
     localStorage.setItem("refresh_token",data.refresh);
     localStorage.setItem("role",         data.user.role);
     localStorage.setItem("user",         JSON.stringify(data.user));
@@ -59,6 +62,7 @@ export const usersAPI = {
   create:       (d)    => request("/auth/users/",                      {method:"POST",  body:JSON.stringify(d)}),
   toggleStatus: (id)   => request("/auth/users/"+id+"/toggle-status/", {method:"PATCH"}),
   delete:       (id)   => request("/auth/users/"+id+"/",               {method:"DELETE"}),
+  stats:        ()     => request("/auth/stats/"),
 };
 
 export const academicsAPI = {
@@ -70,10 +74,9 @@ export const academicsAPI = {
     students:(id)=>request("/classes/"+id+"/students/"),
     assignStudent:(id,sid)=>request("/classes/"+id+"/assign-student/",{method:"POST",body:JSON.stringify({student_id:sid})}),
     removeStudent:(id,sid)=>request("/classes/"+id+"/remove-student/",{method:"POST",body:JSON.stringify({student_id:sid})}),
-    assignTeacher:       (id,tid)     => request("/classes/"+id+"/assign-teacher/",        {method:"POST",   body:JSON.stringify({teacher_id:tid})}),
-    assignAdvisor:       (id,tid)     => request("/classes/"+id+"/assign-advisor/",        {method:"POST",   body:JSON.stringify({teacher_id:tid||null})}),
-    addSubjectTeacher:   (id,tid,sub) => request("/classes/"+id+"/add-subject-teacher/",   {method:"POST",   body:JSON.stringify({teacher_id:tid,subject:sub})}),
-    removeSubjectTeacher:(id,stId)    => request("/classes/"+id+"/remove-subject-teacher/",{method:"DELETE", body:JSON.stringify({id:stId})}),
+    assignTeacher:(id,tid)=>request("/classes/"+id+"/assign-teacher/",{method:"POST",body:JSON.stringify({teacher_id:tid})}),
+    addSubjectTeacher:(id,tid,subject)=>request("/classes/"+id+"/add-subject-teacher/",{method:"POST",body:JSON.stringify({teacher_id:tid,subject})}),
+    removeSubjectTeacher:(id,stId)=>request("/classes/"+id+"/remove-subject-teacher/",{method:"DELETE",body:JSON.stringify({id:stId})}),
   },
   teachers:()=>request("/teachers/list/"),
   unassignedStudents:()=>request("/students/unassigned/"),
@@ -102,7 +105,21 @@ export const quizzesAPI = {
 
 export const notificationsAPI = {
   list:()=>request("/notifications/"),
-  send:(d)=>request("/notifications/send/",{method:"POST",body:JSON.stringify(d)}),
+  send: (d) => {
+    if (d instanceof FormData) {
+      const token = getToken();
+      return fetch((process.env.REACT_APP_API_URL||"http://localhost:8000")+"/api/notifications/send/", {
+        method: "POST",
+        headers: token ? { Authorization: "Bearer "+token } : {},
+        body: d,
+      }).then(async r => {
+        const data = await r.json();
+        if (!r.ok) throw data;
+        return data;
+      });
+    }
+    return request("/notifications/send/",{method:"POST",body:JSON.stringify(d)});
+  },
   markRead:(id)=>request("/notifications/mark-read/",{method:"POST",body:JSON.stringify(id?{id}:{})}),
   markAllRead:()=>request("/notifications/mark-read/",{method:"POST",body:JSON.stringify({})}),
 };
@@ -121,12 +138,12 @@ export const parentAPI = {
 };
 
 export const timetableAPI = {
-  get:       (classId)   => request("/timetable/"+classId+"/"),
-  my:        ()          => request("/timetable/my/"),
-  myTeacher:    ()        => request("/timetable/teacher/"),
-  classTeachers:(classId)  => request("/timetable/"+classId+"/teachers/"),
-  addSlot:   (classId,d) => request("/timetable/"+classId+"/",{method:"POST",body:JSON.stringify(d)}),
-  deleteSlot:(slotId)    => request("/timetable/slot/"+slotId+"/",{method:"DELETE"}),
+  get:            (classId)   => request(`/timetable/${classId}/`),
+  my:             ()          => request("/timetable/my/"),
+  myTeacher:      ()          => request("/timetable/teacher/"),
+  classTeachers:  (classId)   => request(`/timetable/${classId}/teachers/`),
+  addSlot:        (classId,d) => request(`/timetable/${classId}/`,{method:"POST",body:JSON.stringify(d)}),
+  deleteSlot:     (slotId)    => request(`/timetable/slot/${slotId}/`,{method:"DELETE"}),
 };
 
 export const assignmentsAPI = {
@@ -198,15 +215,11 @@ export const reportsAPI = {
 };
 
 export const lessonPlanAPI = {
-  list:          ()          => request("/lesson-plans/"),
-  get:           (id)        => request("/lesson-plans/"+id+"/"),
-  create:        (d)         => request("/lesson-plans/",         {method:"POST", body:JSON.stringify(d)}),
-  update:        (id, notes) => request("/lesson-plans/"+id+"/",  {method:"PATCH",body:JSON.stringify({notes})}),
-  delete:        (id)        => request("/lesson-plans/"+id+"/",  {method:"DELETE"}),
-  addEntry:      (id, entry) => request("/lesson-plans/"+id+"/entries/", {method:"POST", body:JSON.stringify(entry)}),
-  deleteEntry:   (id, entry_id) => request("/lesson-plans/"+id+"/entries/", {method:"DELETE",body:JSON.stringify({entry_id})}),
-  myClassPlan:   ()          => request("/lesson-plans/my-class/"),
-  isAdvisor:     ()          => request("/lesson-plans/is-advisor/"),
+  // New simple API — entries per teacher, per class, per week
+  list:      (params={}) => request("/lesson-plans/?" + new URLSearchParams(params)),
+  create:    (d)         => request("/lesson-plans/",         {method:"POST",   body:JSON.stringify(d)}),
+  update:    (id, d)     => request("/lesson-plans/"+id+"/",  {method:"PATCH",  body:JSON.stringify(d)}),
+  delete:    (id)        => request("/lesson-plans/"+id+"/",  {method:"DELETE"}),
 };
 
 export const videosAPI = {
@@ -218,7 +231,7 @@ export const videosAPI = {
     return fetch(base + "/api/videos/", {
       method:  "POST",
       headers: token ? { Authorization: "Bearer " + token } : {},
-      body:    formData,  // FormData — no Content-Type header (browser sets it with boundary)
+      body:    formData,
     }).then(async r => {
       const d = await r.json();
       if (!r.ok) throw d;

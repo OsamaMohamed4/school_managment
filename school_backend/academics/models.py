@@ -24,14 +24,7 @@ class ClassRoom(models.Model):
         limit_choices_to={"role": "teacher"},
     )
     subject    = models.CharField(max_length=100, blank=True)
-    advisor    = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="advising_classes",
-        limit_choices_to={"role": "teacher"},
-        help_text="Grade Advisor (رائد الفصل) — responsible for weekly plan",
-    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -69,3 +62,40 @@ class ClassSubjectTeacher(models.Model):
 
     def __str__(self):
         return f"{self.class_room} | {self.subject} → {self.teacher.get_full_name()}"
+
+
+DAYS = [
+    ("sun", "Sunday"),
+    ("mon", "Monday"),
+    ("tue", "Tuesday"),
+    ("wed", "Wednesday"),
+    ("thu", "Thursday"),
+    ("fri", "Friday"),
+    ("sat", "Saturday"),
+]
+
+
+class LessonPlan(models.Model):
+    """
+    Weekly lesson plan entry.
+    Any teacher can add entries for classes they teach.
+    """
+    class_room = models.ForeignKey(
+        ClassRoom, on_delete=models.CASCADE, related_name="lesson_plans"
+    )
+    teacher    = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="lesson_plans", limit_choices_to={"role": "teacher"}
+    )
+    week_start = models.DateField(help_text="First day of the week (Sunday)")
+    day        = models.CharField(max_length=3, choices=DAYS)
+    subject    = models.CharField(max_length=100)
+    classwork  = models.TextField(blank=True)
+    homework   = models.TextField(blank=True)
+    order      = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["week_start", "day", "order"]
+
+    def __str__(self):
+        return f"{self.class_room} | {self.week_start} | {self.day} | {self.subject}"

@@ -17,5 +17,4 @@ urlpatterns = [
     path("api/", include("reports.urls")),
     path("api/gradebook/", include("quizzes.gradebook_urls")),
     path("api/", include("videos.urls")),
-    path("api/", include("lesson_plan.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

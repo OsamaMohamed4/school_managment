@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import Count, Q
+from academics.models import ClassRoom, ClassSubjectTeacher
 
 from .models import AttendanceRecord
 from .serializers import AttendanceRecordSerializer, BulkAttendanceSerializer
@@ -36,6 +37,13 @@ class BulkAttendanceView(APIView):
 
         data       = serializer.validated_data
         class_room = get_object_or_404(ClassRoom, pk=data["class_room"])
+        
+        if request.user.role == "teacher":
+            is_main = class_room.teacher_id == request.user.id
+            is_subject = ClassSubjectTeacher.objects.filter(class_room=class_room, teacher=request.user).exists()
+            if not (is_main or is_subject):
+                return Response({"error": "You do not teach this class."}, status=403)
+
         date       = data["date"]
         records    = data["records"]
 
@@ -88,9 +96,16 @@ class ClassAttendanceView(APIView):
     permission_classes = [IsAdminOrTeacher]
 
     def get(self, request, class_id):
+        cls = get_object_or_404(ClassRoom, pk=class_id)
+        if request.user.role == "teacher":
+            is_main = cls.teacher_id == request.user.id
+            is_subject = ClassSubjectTeacher.objects.filter(class_room=cls, teacher=request.user).exists()
+            if not (is_main or is_subject):
+                return Response({"error": "You do not teach this class."}, status=403)
+
         date = request.query_params.get("date")
         qs   = AttendanceRecord.objects.filter(
-            class_room_id=class_id
+            class_room=cls
         ).select_related("student")
         if date:
             qs = qs.filter(date=date)
@@ -103,26 +118,34 @@ class AttendanceReportView(APIView):
 
     def get(self, request, class_id):
         classroom = get_object_or_404(ClassRoom, pk=class_id)
+        if request.user.role == "teacher":
+            is_main = classroom.teacher_id == request.user.id
+            is_subject = ClassSubjectTeacher.objects.filter(class_room=classroom, teacher=request.user).exists()
+            if not (is_main or is_subject):
+                return Response({"error": "You do not teach this class."}, status=403)
 
         # All records for this class
         records = AttendanceRecord.objects.filter(class_room=classroom)
 
         # Per-student summary
-        students = CustomUser.objects.filter(
-            student_profile__class_room=classroom
-        ).distinct()
+        student_stats_query = records.values(
+            "student__id", "student__first_name", "student__last_name", "student__email"
+        ).annotate(
+            total=Count("id"),
+            present=Count("id", filter=Q(status="present"))
+        )
 
         student_stats = []
-        for student in students:
-            stu_records = records.filter(student=student)
-            total   = stu_records.count()
-            present = stu_records.filter(status="present").count()
-            absent  = total - present
-            rate    = round((present / total * 100), 1) if total > 0 else 0
+        for stat in student_stats_query:
+            total = stat["total"]
+            present = stat["present"]
+            absent = total - present
+            rate = round((present / total * 100), 1) if total > 0 else 0
+            full_name = f"{stat['student__first_name']} {stat['student__last_name']}".strip()
             student_stats.append({
-                "student_id":      student.id,
-                "student_name":    student.get_full_name(),
-                "email":           student.email,
+                "student_id":      stat["student__id"],
+                "student_name":    full_name,
+                "email":           stat["student__email"],
                 "total_days":      total,
                 "present_days":    present,
                 "absent_days":     absent,

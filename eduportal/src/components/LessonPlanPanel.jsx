@@ -1,320 +1,390 @@
 import { useState, useEffect } from "react";
-import { lessonPlanAPI } from "../api";
+import { lessonPlanAPI, academicsAPI } from "../api";
 import { useAuth } from "../context/AuthContext";
 
 const DAYS = [
-  { key:"sun", label:"Sunday / الأحد" },
-  { key:"mon", label:"Monday / الاثنين" },
-  { key:"tue", label:"Tuesday / الثلاثاء" },
-  { key:"wed", label:"Wednesday / الأربعاء" },
-  { key:"thu", label:"Thursday / الخميس" },
-  { key:"fri", label:"Friday / الجمعة" },
-  { key:"sat", label:"Saturday / السبت" },
+  { key:"sun", label:"Sunday " },
+  { key:"mon", label:"Monday " },
+  { key:"tue", label:"Tuesday " },
+  { key:"wed", label:"Wednesday " },
+  { key:"thu", label:"Thursday " },
+  { key:"fri", label:"Friday " },
+  { key:"sat", label:"Saturday" },
 ];
 
 const SUBJECTS = [
   "ENGLISH","ARABIC","MATH","SCIENCE","SOCIAL STUDIES",
-  "ISLAMIC","COMPUTER","ART","P.E","KARATE",
-  "HIGH-LEVEL","MUSIC","OTHER"
+  "ISLAMIC","COMPUTER","ART","P.E","KARATE","HIGH-LEVEL","MUSIC","OTHER"
 ];
 
+// Get Monday of current week as default week_start
+function getThisWeekSunday() {
+  const d = new Date();
+  const day = d.getDay(); // 0=sun
+  d.setDate(d.getDate() - day);
+  return d.toISOString().split("T")[0];
+}
+
 export default function LessonPlanPanel({ accentColor="#059669", accentBg="#ECFDF5", readOnly=false }) {
-  const { user }        = useAuth();
-  const isAdvisor        = !readOnly && user?.role === "teacher";
+  const { user } = useAuth();
+  const isTeacher = !readOnly && user?.role === "teacher";
 
-  const [plans,         setPlans]         = useState([]);
-  const [selPlan,       setSelPlan]       = useState(null);
-  const [advisingClasses, setAdvisingClasses] = useState([]);
-  const [view,          setView]          = useState("list"); // list | detail | new | add-entry
-  const [loading,       setLoading]       = useState(false);
-  const [toast,         setToast]         = useState(null);
+  const [weekStart, setWeekStart] = useState(getThisWeekSunday());
+  const [classes,   setClasses]   = useState([]);
+  const [selClass,  setSelClass]  = useState(null);
+  const [entries,   setEntries]   = useState([]); // flat list
+  const [loading,   setLoading]   = useState(false);
+  const [toast,     setToast]     = useState(null);
 
-  // New plan form
-  const [newPlan, setNewPlan] = useState({ class_room:"", week_start:"", week_end:"", notes:"" });
+  // Add form
+  const [showAdd, setShowAdd] = useState(false);
+  const [newEntry, setNewEntry] = useState({
+    day: "sun", subject: "ENGLISH", classwork: "", homework: ""
+  });
+  const [saving, setSaving] = useState(false);
 
-  // Add entry form
-  const [newEntry, setNewEntry] = useState({ day:"sun", subject:"ENGLISH", classwork:"", homework:"" });
+  // Edit
+  const [editId,    setEditId]    = useState(null);
+  const [editData,  setEditData]  = useState({});
 
-  const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),3500);};
+  const showToast = (msg, type="success") => {
+    setToast({msg,type}); setTimeout(()=>setToast(null), 3500);
+  };
 
+  // Load teacher's classes
+  useEffect(() => {
+    if (isTeacher) {
+      academicsAPI.classes.myClasses()
+        .then(d => {
+          const list = Array.isArray(d) ? d : (d.results||[]);
+          setClasses(list);
+          if (list.length > 0 && !selClass) setSelClass(list[0]);
+        })
+        .catch(()=>{});
+    }
+  }, [isTeacher]);
+
+  // Load entries
   const load = async () => {
     setLoading(true);
     try {
-      const d = await lessonPlanAPI.list();
-      setPlans(d.plans || []);
-    } catch { showToast("Failed to load plans","error"); }
+      const params = { week: weekStart };
+      if (selClass) params.class_id = selClass.id;
+      const d = await lessonPlanAPI.list(params);
+      setEntries(d.flat || []);
+    } catch { showToast("Failed to load","error"); }
     finally { setLoading(false); }
   };
 
-  useEffect(()=>{
-    load();
-    if (isAdvisor) {
-      lessonPlanAPI.isAdvisor().then(d => setAdvisingClasses(d.advising_classes||[])).catch(()=>{});
-    }
-  },[]);
+  useEffect(() => {
+    if (!isTeacher || selClass) load();
+  }, [weekStart, selClass, isTeacher]);
 
-  const openPlan = async (p) => {
-    setLoading(true);
-    try {
-      const d = await lessonPlanAPI.get(p.id);
-      setSelPlan(d);
-      setView("detail");
-    } catch { showToast("Failed to load plan","error"); }
-    finally { setLoading(false); }
-  };
+  // Group by day
+  const grouped = {};
+  DAYS.forEach(d => {
+    const dayEntries = entries.filter(e => e.day === d.key);
+    if (dayEntries.length > 0) grouped[d.key] = dayEntries;
+  });
 
-  const handleCreate = async () => {
-    if (!newPlan.class_room||!newPlan.week_start||!newPlan.week_end) {
-      showToast("Fill all required fields","error"); return;
+  const handleAdd = async () => {
+    if (!newEntry.classwork && !newEntry.homework) {
+      showToast("Enter classwork or homework","error"); return;
     }
+    if (!selClass) { showToast("Select a class","error"); return; }
+    setSaving(true);
     try {
-      const d = await lessonPlanAPI.create({
-        ...newPlan, class_room: parseInt(newPlan.class_room)
+      await lessonPlanAPI.create({
+        class_room: selClass.id,
+        week_start: weekStart,
+        day:        newEntry.day,
+        subject:    newEntry.subject,
+        classwork:  newEntry.classwork,
+        homework:   newEntry.homework,
       });
-      showToast("Weekly plan created!");
-      setSelPlan(d); setView("detail"); load();
-    } catch(e){ showToast(e?.error||"Failed to create plan","error"); }
-  };
-
-  const handleAddEntry = async () => {
-    if (!newEntry.subject) { showToast("Select a subject","error"); return; }
-    if (!newEntry.classwork && !newEntry.homework) { showToast("Enter classwork or homework","error"); return; }
-    try {
-      const d = await lessonPlanAPI.addEntry(selPlan.id, newEntry);
-      setSelPlan(d);
-      setNewEntry({ day:"sun", subject:"ENGLISH", classwork:"", homework:"" });
       showToast("Entry added!");
-    } catch(e){ showToast(e?.error||"Failed","error"); }
+      setNewEntry({ day:"sun", subject:"ENGLISH", classwork:"", homework:"" });
+      setShowAdd(false);
+      load();
+    } catch(e) { showToast(e?.error||"Failed","error"); }
+    finally { setSaving(false); }
   };
 
-  const handleDeleteEntry = async (entryId) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this entry?")) return;
     try {
-      const d = await lessonPlanAPI.deleteEntry(selPlan.id, entryId);
-      setSelPlan(d);
-      showToast("Entry removed!");
+      await lessonPlanAPI.delete(id);
+      showToast("Deleted!");
+      load();
     } catch { showToast("Failed","error"); }
   };
 
-  const handleDeletePlan = async () => {
-    if (!window.confirm("Delete this entire weekly plan?")) return;
+  const handleEdit = async (id) => {
     try {
-      await lessonPlanAPI.delete(selPlan.id);
-      showToast("Plan deleted!");
-      setView("list"); setSelPlan(null); load();
+      await lessonPlanAPI.update(id, editData);
+      showToast("Updated!");
+      setEditId(null);
+      load();
     } catch { showToast("Failed","error"); }
   };
 
-  // Group entries by day
-  const groupByDay = (entries=[]) => {
-    const map = {};
-    entries.forEach(e => {
-      if (!map[e.day]) map[e.day] = [];
-      map[e.day].push(e);
-    });
-    return map;
+  // Week navigation
+  const changeWeek = (dir) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + dir * 7);
+    setWeekStart(d.toISOString().split("T")[0]);
   };
+
+  // Week end = weekStart + 4 days (Thu)
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 4);
+  const weekEndStr = weekEnd.toISOString().split("T")[0];
 
   return (
     <div>
       <style>{`
-        .lp-card{background:#fff;border-radius:13px;padding:16px 18px;border:1.5px solid #E2E8F0;margin-bottom:10px;cursor:pointer;transition:all .18s;}
-        .lp-card:hover{border-color:${accentColor};box-shadow:0 2px 12px ${accentColor}22;}
-        .lp-inp{width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#F8FAFC;color:#0F172A;}
+        .lp-inp{width:100%;padding:8px 11px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#F8FAFC;color:#0F172A;}
         .lp-inp:focus{border-color:${accentColor};background:#fff;}
-        .lp-btn{padding:8px 16px;border-radius:9px;border:none;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;transition:all .18s;}
-        .day-header{background:${accentBg};color:${accentColor};font-weight:700;font-size:13px;padding:8px 14px;border-radius:8px;margin:12px 0 6px;}
-        .entry-row{display:grid;grid-template-columns:1fr 1.5fr 1.5fr auto;gap:8px;align-items:center;padding:8px 12px;border-radius:8px;border:1px solid #F1F5F9;background:#FAFAFA;margin-bottom:5px;font-size:13px;}
-        .entry-row:hover{background:${accentBg}44;}
-        .del-btn{background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;}
-        .del-btn:hover{background:#FEF2F2;}
+        .lp-btn{padding:7px 14px;border-radius:8px;border:none;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;transition:all .18s;}
+        
+        .entry-row {
+          display: grid;
+          grid-template-columns: 120px 1fr 1fr ${isTeacher ? "80px" : ""};
+          gap: 12px;
+          align-items: start;
+          padding: 12px;
+          border-radius: 10px;
+          border: 1px solid #E2E8F0;
+          background: #fff;
+          margin-bottom: 8px;
+          font-size: 13px;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        .entry-row:hover { border-color: ${accentColor}66; }
+        
+        .day-hdr {
+          background: ${accentBg};
+          color: ${accentColor};
+          font-weight: 700;
+          font-size: 13px;
+          padding: 8px 14px;
+          border-radius: 8px;
+          margin: 16px 0 8px;
+          text-transform: uppercase;
+          letter-spacing: .5px;
+        }
+
+        .tbl-hdr {
+          display: grid;
+          grid-template-columns: 120px 1fr 1fr ${isTeacher ? "80px" : ""};
+          gap: 12px;
+          padding: 0 12px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #94A3B8;
+          text-transform: uppercase;
+          letter-spacing: .5px;
+          margin-bottom: 8px;
+        }
+
+        .entry-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        @media (max-width: 768px) {
+          .tbl-hdr { display: none; }
+          .entry-row {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+          }
+          .entry-actions {
+            flex-direction: row;
+            border-top: 1px solid #E2E8F0;
+            padding-top: 12px;
+            margin-top: 4px;
+            justify-content: flex-end;
+          }
+          .cell-label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #94A3B8;
+            margin-bottom: 4px;
+            font-weight: 700;
+            letter-spacing: .5px;
+          }
+        }
+        @media (min-width: 769px) {
+          .cell-label { display: none; }
+        }
       `}</style>
 
-      {/* LIST VIEW */}
-      {view==="list" && (
-        <>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-            <h3 style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>
-              📋 Weekly Plans ({plans.length})
-            </h3>
-            {isAdvisor && advisingClasses.length > 0 && (
-              <button className="lp-btn" style={{background:accentColor,color:"#fff"}} onClick={()=>setView("new")}>
-                + New Plan
-              </button>
-            )}
-          </div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+        <h3 style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>📋 Weekly Lesson Plan</h3>
+        {isTeacher && (
+          <button className="lp-btn" style={{background:accentColor,color:"#fff"}}
+            onClick={()=>setShowAdd(true)}>
+            + Add Entry
+          </button>
+        )}
+      </div>
 
-          {isAdvisor && advisingClasses.length === 0 && (
-            <div style={{background:"#FEF3C7",border:"1.5px solid #FDE68A",borderRadius:12,padding:16,marginBottom:14,fontSize:13,color:"#92400E"}}>
-              ⚠️ You are not assigned as advisor (رائد الفصل) to any class yet. Ask admin to assign you.
-            </div>
-          )}
+      {/* Week navigator */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <button className="lp-btn" style={{background:"#F1F5F9",color:"#475569",padding:"6px 12px"}}
+          onClick={()=>changeWeek(-1)}>← Prev</button>
+        <div style={{flex:1,textAlign:"center",fontSize:13,fontWeight:600,color:"#0F172A"}}>
+          📅 {weekStart} → {weekEndStr}
+        </div>
+        <button className="lp-btn" style={{background:"#F1F5F9",color:"#475569",padding:"6px 12px"}}
+          onClick={()=>changeWeek(1)}>Next →</button>
+      </div>
 
-          {loading ? <div style={{padding:32,textAlign:"center",color:"#94A3B8"}}>Loading...</div>
-          : plans.length === 0 ? (
-            <div style={{textAlign:"center",padding:48,background:"#fff",borderRadius:14,border:"1.5px solid #E2E8F0",color:"#94A3B8"}}>
-              <div style={{fontSize:36,marginBottom:8}}>📋</div>
-              <p>No weekly plans yet.</p>
-              {isAdvisor && <p style={{fontSize:12,marginTop:4}}>Create your first plan!</p>}
-            </div>
-          ) : plans.map(p => (
-            <div key={p.id} className="lp-card" onClick={()=>openPlan(p)}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:14,color:"#0F172A",marginBottom:3}}>
-                    Grade {p.grade_name} — Class {p.class_name}
-                  </div>
-                  <div style={{fontSize:12,color:"#64748B"}}>
-                    📅 {p.week_start} → {p.week_end} · {p.entry_count} entries
-                  </div>
-                  <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>
-                    By: {p.advisor_name}
-                  </div>
-                </div>
-                <span style={{background:accentBg,color:accentColor,padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:700}}>
-                  Week {p.week_start}
-                </span>
-              </div>
-            </div>
+      {/* Class selector — teacher only */}
+      {isTeacher && classes.length > 1 && (
+        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          {classes.map(c=>(
+            <button key={c.id} onClick={()=>setSelClass(c)}
+              style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:600,
+                cursor:"pointer",fontFamily:"inherit",border:"1.5px solid #E2E8F0",
+                background:selClass?.id===c.id?accentColor:"#F8FAFC",
+                color:selClass?.id===c.id?"#fff":"#475569"}}>
+              Grade {c.grade_name} — Class {c.name}
+            </button>
           ))}
-        </>
-      )}
-
-      {/* NEW PLAN FORM */}
-      {view==="new" && isAdvisor && (
-        <div style={{background:"#fff",borderRadius:14,padding:24,border:"1.5px solid #E2E8F0",maxWidth:520}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
-            <button className="lp-btn" style={{background:"#F1F5F9",color:"#475569"}} onClick={()=>setView("list")}>← Back</button>
-            <h3 style={{fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:18,color:"#0F172A"}}>New Weekly Plan</h3>
-          </div>
-
-          <div style={{marginBottom:12}}>
-            <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Class *</label>
-            <select className="lp-inp" value={newPlan.class_room} onChange={e=>setNewPlan(p=>({...p,class_room:e.target.value}))}>
-              <option value="">— Select Your Class —</option>
-              {advisingClasses.map(c=><option key={c.id} value={c.id}>Grade {c.grade} — Class {c.name}</option>)}
-            </select>
-          </div>
-
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div>
-              <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Week Start *</label>
-              <input className="lp-inp" type="date" value={newPlan.week_start} onChange={e=>setNewPlan(p=>({...p,week_start:e.target.value}))}/>
-            </div>
-            <div>
-              <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Week End *</label>
-              <input className="lp-inp" type="date" value={newPlan.week_end} onChange={e=>setNewPlan(p=>({...p,week_end:e.target.value}))}/>
-            </div>
-          </div>
-
-          <div style={{marginBottom:18}}>
-            <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Notes (optional)</label>
-            <textarea className="lp-inp" rows={2} placeholder="e.g. Exam week, field trip..." value={newPlan.notes} onChange={e=>setNewPlan(p=>({...p,notes:e.target.value}))} style={{resize:"vertical"}}/>
-          </div>
-
-          <div style={{display:"flex",gap:8}}>
-            <button className="lp-btn" style={{background:accentColor,color:"#fff",flex:1,padding:"11px"}} onClick={handleCreate}>Create Plan</button>
-            <button className="lp-btn" style={{background:"#F1F5F9",color:"#475569",flex:1,padding:"11px"}} onClick={()=>setView("list")}>Cancel</button>
-          </div>
         </div>
       )}
 
-      {/* PLAN DETAIL VIEW */}
-      {view==="detail" && selPlan && (
-        <div>
-          {/* Header */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-            <button className="lp-btn" style={{background:"#F1F5F9",color:"#475569"}} onClick={()=>setView("list")}>← Back</button>
-            <div style={{flex:1}}>
-              <h3 style={{fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:17,color:"#0F172A"}}>
-                Grade {selPlan.grade_name} — Class {selPlan.class_name}
-              </h3>
-              <div style={{fontSize:12,color:"#64748B"}}>
-                📅 {selPlan.week_start} → {selPlan.week_end} · By: {selPlan.advisor_name}
-              </div>
-            </div>
-            {isAdvisor && selPlan.advisor === (JSON.parse(localStorage.getItem("user")||"{}"))?.id && (
-              <button className="lp-btn" style={{background:"#FEF2F2",color:"#EF4444",fontSize:12}} onClick={handleDeletePlan}>
-                🗑 Delete Plan
-              </button>
-            )}
-          </div>
+      {/* Table header */}
+      {Object.keys(grouped).length > 0 && (
+        <div className="tbl-hdr">
+          <span>Subject</span><span>Classwork</span><span>Homework</span>{isTeacher&&<span></span>}
+        </div>
+      )}
 
-          {selPlan.notes && (
-            <div style={{background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#92400E"}}>
-              📝 {selPlan.notes}
-            </div>
-          )}
-
-          {/* Plan table grouped by day */}
-          {DAYS.filter(d => groupByDay(selPlan.entries)[d.key]).map(d => {
-            const dayEntries = groupByDay(selPlan.entries)[d.key] || [];
-            return (
-              <div key={d.key} style={{marginBottom:12}}>
-                <div className="day-header">{d.label}</div>
-                {/* Header row */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1.5fr 1.5fr auto",gap:8,padding:"5px 12px",fontSize:11,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:0.4}}>
-                  <span>Subject</span><span>Classwork</span><span>Homework</span><span></span>
-                </div>
-                {dayEntries.map(e => (
-                  <div key={e.id} className="entry-row">
-                    <span style={{fontWeight:700,color:"#0F172A"}}>{e.subject}</span>
-                    <span style={{color:"#374151",direction:"rtl",textAlign:"right"}}>{e.classwork||"—"}</span>
-                    <span style={{color:"#374151",direction:"rtl",textAlign:"right"}}>{e.homework||"—"}</span>
-                    {isAdvisor && (
-                      <button className="del-btn" onClick={()=>handleDeleteEntry(e.id)} title="Delete">✕</button>
+      {/* Entries grouped by day */}
+      {loading ? (
+        <div style={{padding:32,textAlign:"center",color:"#94A3B8"}}>Loading...</div>
+      ) : Object.keys(grouped).length === 0 ? (
+        <div style={{textAlign:"center",padding:48,background:"#fff",borderRadius:14,border:"1.5px solid #E2E8F0",color:"#94A3B8"}}>
+          <div style={{fontSize:36,marginBottom:8}}>📋</div>
+          <p>No lesson plan for this week.</p>
+          {isTeacher && <p style={{fontSize:12,marginTop:4}}>Click "+ Add Entry" to start.</p>}
+        </div>
+      ) : (
+        DAYS.filter(d => grouped[d.key]).map(d => (
+          <div key={d.key}>
+            <div className="day-hdr">{d.label}</div>
+            {grouped[d.key].map(e => (
+              <div key={e.id} className="entry-row">
+                {editId === e.id ? (
+                  <>
+                    <div>
+                      <span className="cell-label">Subject</span>
+                      <span style={{fontWeight:700,display:"block",paddingTop:8}}>{e.subject}</span>
+                    </div>
+                    <div>
+                      <span className="cell-label">Classwork</span>
+                      <textarea className="lp-inp" dir="auto" rows={2} value={editData.classwork||""} onChange={ev=>setEditData(x=>({...x,classwork:ev.target.value}))} style={{resize:"none"}}/>
+                    </div>
+                    <div>
+                      <span className="cell-label">Homework</span>
+                      <textarea className="lp-inp" dir="auto" rows={2} value={editData.homework||""} onChange={ev=>setEditData(x=>({...x,homework:ev.target.value}))} style={{resize:"none"}}/>
+                    </div>
+                    {isTeacher && (
+                      <div className="entry-actions">
+                        <button className="lp-btn" style={{background:accentColor,color:"#fff",padding:"6px 10px",fontSize:11,flex:1}} onClick={()=>handleEdit(e.id)}>Save</button>
+                        <button className="lp-btn" style={{background:"#F1F5F9",color:"#64748B",padding:"6px 10px",fontSize:11,flex:1}} onClick={()=>setEditId(null)}>Cancel</button>
+                      </div>
                     )}
-                  </div>
-                ))}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <span className="cell-label">Subject</span>
+                      <span style={{fontWeight:700,color:"#0F172A",display:"block"}}>{e.subject}</span>
+                    </div>
+                    <div>
+                      <span className="cell-label">Classwork</span>
+                      <div dir="auto" style={{color:"#374151",lineHeight:1.6}}>{e.classwork||"—"}</div>
+                    </div>
+                    <div>
+                      <span className="cell-label">Homework</span>
+                      <div dir="auto" style={{color:"#374151",lineHeight:1.6}}>{e.homework||"—"}</div>
+                    </div>
+                    {isTeacher && (
+                      <div className="entry-actions">
+                        <button onClick={()=>{setEditId(e.id);setEditData({classwork:e.classwork,homework:e.homework});}}
+                          style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:6,padding:"6px 10px",color:accentColor,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ Edit</button>
+                        <button onClick={()=>handleDelete(e.id)}
+                          style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:6,padding:"6px 10px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑 Delete</button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            );
-          })}
+            ))}
+          </div>
+        ))
+      )}
 
-          {selPlan.entries?.length === 0 && (
-            <div style={{textAlign:"center",padding:32,color:"#94A3B8",background:"#F8FAFC",borderRadius:12}}>
-              No entries yet. {isAdvisor ? "Add subjects below." : ""}
+      {/* Add Entry Modal */}
+      {showAdd && isTeacher && (
+        <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(3px)"}}>
+          <div style={{background:"#fff",borderRadius:18,padding:28,width:460,maxWidth:"94vw"}}>
+            <h3 style={{fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:18,marginBottom:18,color:"#0F172A"}}>
+              Add Lesson Plan Entry
+            </h3>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Day</label>
+                <select className="lp-inp" value={newEntry.day} onChange={e=>setNewEntry(n=>({...n,day:e.target.value}))}>
+                  {DAYS.map(d=><option key={d.key} value={d.key}>{d.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Subject</label>
+                <select className="lp-inp" value={newEntry.subject} onChange={e=>setNewEntry(n=>({...n,subject:e.target.value}))}>
+                  {SUBJECTS.map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
             </div>
-          )}
 
-          {/* Add entry form — only for advisor */}
-          {isAdvisor && (
-            <div style={{background:"#fff",borderRadius:12,padding:18,border:`1.5px dashed ${accentColor}`,marginTop:16}}>
-              <h4 style={{fontSize:13,fontWeight:700,marginBottom:14,color:accentColor}}>+ Add Entry</h4>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                <div>
-                  <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Day</label>
-                  <select className="lp-inp" value={newEntry.day} onChange={e=>setNewEntry(n=>({...n,day:e.target.value}))}>
-                    {DAYS.map(d=><option key={d.key} value={d.key}>{d.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Subject</label>
-                  <select className="lp-inp" value={newEntry.subject} onChange={e=>setNewEntry(n=>({...n,subject:e.target.value}))}>
-                    {SUBJECTS.map(s=><option key={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-                <div>
-                  <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Classwork</label>
-                  <textarea className="lp-inp" rows={2} placeholder="e.g. Lesson 2 Dic p.117" value={newEntry.classwork} onChange={e=>setNewEntry(n=>({...n,classwork:e.target.value}))} style={{resize:"none"}}/>
-                </div>
-                <div>
-                  <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Homework</label>
-                  <textarea className="lp-inp" rows={2} placeholder="e.g. Page 141" value={newEntry.homework} onChange={e=>setNewEntry(n=>({...n,homework:e.target.value}))} style={{resize:"none"}}/>
-                </div>
-              </div>
-              <button className="lp-btn" style={{background:accentColor,color:"#fff",padding:"9px 20px"}} onClick={handleAddEntry}>
-                + Add Entry
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Classwork</label>
+              <textarea className="lp-inp" dir="auto" rows={2} 
+                value={newEntry.classwork} onChange={e=>setNewEntry(n=>({...n,classwork:e.target.value}))} style={{resize:"none"}}/>
+            </div>
+
+            <div style={{marginBottom:20}}>
+              <label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Homework</label>
+              <textarea className="lp-inp" dir="auto" rows={2}
+                value={newEntry.homework} onChange={e=>setNewEntry(n=>({...n,homework:e.target.value}))} style={{resize:"none"}}/>
+            </div>
+
+            <div style={{display:"flex",gap:8}}>
+              <button className="lp-btn" disabled={saving} onClick={handleAdd}
+                style={{flex:1,padding:"11px",background:accentColor,color:"#fff"}}>
+                {saving ? "Saving..." : "Add Entry"}
+              </button>
+              <button className="lp-btn" onClick={()=>setShowAdd(false)}
+                style={{flex:1,padding:"11px",background:"#F1F5F9",color:"#475569"}}>
+                Cancel
               </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
       {toast && (
         <div style={{position:"fixed",bottom:22,right:22,padding:"12px 18px",borderRadius:11,fontSize:13,fontWeight:600,zIndex:300,
-          background:toast.type==="success"?accentColor:"#EF4444",color:"#fff",boxShadow:"0 4px 20px rgba(0,0,0,0.2)"}}>
+          background:toast.type==="success"?accentColor:"#EF4444",color:"#fff",boxShadow:"0 4px 20px rgba(0,0,0,.2)"}}>
           {toast.msg}
         </div>
       )}

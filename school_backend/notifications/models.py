@@ -14,6 +14,7 @@ class Notification(models.Model):
                    related_name="notifications")
     title      = models.CharField(max_length=200)
     message    = models.TextField()
+    file       = models.FileField(upload_to="notifications/", null=True, blank=True)
     notif_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default="info")
     is_read    = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

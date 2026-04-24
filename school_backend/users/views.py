@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
+from django.db.models import Q, Avg
 
 from .models import CustomUser, ParentProfile
 from .serializers import UserSerializer, CreateUserSerializer, ParentChildSerializer
@@ -56,6 +57,16 @@ class MeView(APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
+class UsersStatsView(APIView):
+    permission_classes = [IsAdmin]
+    def get(self, request):
+        from academics.models import Grade
+        return Response({
+            "total": CustomUser.objects.count(),
+            "teachers": CustomUser.objects.filter(role="teacher").count(),
+            "students": CustomUser.objects.filter(role="student").count(),
+            "grades": Grade.objects.count()
+        })
 
 class UserViewSet(ModelViewSet):
     permission_classes = [IsAdmin]
@@ -72,7 +83,7 @@ class UserViewSet(ModelViewSet):
         role   = self.request.query_params.get("role")
         search = self.request.query_params.get("search")
         if role:   qs = qs.filter(role=role)
-        if search: qs = qs.filter(first_name__icontains=search) | qs.filter(last_name__icontains=search) | qs.filter(email__icontains=search)
+        if search: qs = qs.filter(Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(email__icontains=search))
         return qs
 
     @action(detail=True, methods=["patch"], url_path="toggle-status")
@@ -115,7 +126,8 @@ class ParentChildDetailView(APIView):
         attempts = QuizAttempt.objects.filter(student=child).select_related("quiz")
         avg_score = 0
         if attempts.exists():
-            avg_score = round(sum(a.percentage for a in attempts)/attempts.count(),1)
+            avg = attempts.aggregate(avg=Avg("percentage"))["avg"]
+            avg_score = round(avg, 1) if avg is not None else 0
 
         # Class
         sp = getattr(child,"student_profile",None)
@@ -218,7 +230,7 @@ class AdminParentChildrenView(APIView):
     def get(self, request, parent_id):
         parent     = get_object_or_404(CustomUser, pk=parent_id, role="parent")
         profile, _ = ParentProfile.objects.get_or_create(user=parent)
-        children   = profile.children.all()
+        children   = profile.children.select_related("student_profile__class_room__grade").all()
         result = []
         for c in children:
             sp  = getattr(c, "student_profile", None)

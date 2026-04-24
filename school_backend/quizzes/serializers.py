@@ -31,9 +31,14 @@ class QuestionSerializer(serializers.ModelSerializer):
         question     = Question.objects.create(**validated_data)
 
         # Auto-create True/False choices
+        # Both start as False — teacher must specify correct answer via correct_answer_text
         if question.question_type == Question.TYPE_TF and not choices_data:
-            Choice.objects.create(question=question, text="True",  is_correct=True)
-            Choice.objects.create(question=question, text="False", is_correct=False)
+            correct = (question.correct_answer_text or "").strip().lower()
+            true_correct  = correct in ("true", "صح", "صحيح", "1", "yes")
+            false_correct = correct in ("false", "غلط", "خطأ", "0", "no")
+            # If neither specified, default: teacher must pick — set both false
+            Choice.objects.create(question=question, text="True",  is_correct=true_correct)
+            Choice.objects.create(question=question, text="False", is_correct=false_correct)
         else:
             for c in choices_data:
                 Choice.objects.create(question=question, **c)

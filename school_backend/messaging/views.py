@@ -60,8 +60,11 @@ class ContactsView(APIView):
         role = request.user.role
         if role == "teacher":
             # Teacher can message their students
-            from academics.models import ClassRoom
-            classes = ClassRoom.objects.filter(teacher=request.user)
+            from academics.models import ClassRoom, ClassSubjectTeacher
+            from django.db.models import Q
+            subject_class_ids = ClassSubjectTeacher.objects.filter(teacher=request.user).values_list("class_room_id", flat=True)
+            classes = ClassRoom.objects.filter(Q(teacher=request.user) | Q(id__in=subject_class_ids)).distinct()
+            
             from users.models import CustomUser
             students = CustomUser.objects.filter(student_profile__class_room__in=classes, is_active=True)
             result = [{"id":s.id,"full_name":s.get_full_name(),"role":s.role} for s in students]

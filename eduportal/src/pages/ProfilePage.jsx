@@ -1,4 +1,4 @@
-import "../../src/animations.css";
+import "../animations.css";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -8,7 +8,7 @@ const ROLE_COLOR = { admin:"#2563EB", teacher:"#059669", student:"#7C3AED", pare
 const ROLE_BG    = { admin:"#EFF6FF", teacher:"#ECFDF5", student:"#F5F3FF", parent:"#FEF3C7" };
 
 export default function ProfilePage() {
-  const { user, login, logout } = useAuth();
+  const { user, login, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const color    = ROLE_COLOR[user?.role] || "#2563EB";
   const bg       = ROLE_BG[user?.role]    || "#EFF6FF";
@@ -43,7 +43,7 @@ export default function ProfilePage() {
       const res = await authAPI.updateProfile({ first_name: firstName, last_name: lastName });
       showToast("Profile updated!");
       setProfile(p=>({...p, first_name:firstName, last_name:lastName, full_name:res.full_name}));
-      login({...user, first_name:firstName, last_name:lastName, full_name:res.full_name});
+      updateUser({...user, first_name:firstName, last_name:lastName, full_name:res.full_name});
       setEditing(false);
     } catch { showToast("Failed to update","error"); }
     finally { setSaving(false); }
@@ -64,7 +64,7 @@ export default function ProfilePage() {
     finally { setChangingP(false); }
   };
 
-  const DASHBOARD = { admin:"/admin/dashboard", teacher:"/teacher/dashboard", student:"/student/dashboard", parent:"/parent/dashboard" };
+  const DASHBOARD = { admin:"/admin", teacher:"/teacher", student:"/student", parent:"/parent" };
 
   return (
     <div style={{minHeight:"100vh",background:"#0F172A",fontFamily:"'DM Sans',sans-serif"}}>

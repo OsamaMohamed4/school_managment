@@ -17,7 +17,7 @@ function AppRoutes() {
       <Route path="/"                  element={<LandingPage />} />
       <Route path="/login/:role"       element={<LoginPage />} />
 
-      {/* ✅ FIX: LoginPage does navigate(`/${role}`) so routes must be /admin /teacher etc */}
+      {/* FIX: LoginPage does navigate(`/${role}`) so routes must be /admin /teacher etc */}
       <Route path="/admin"    element={<ProtectedRoute role="admin">   <AdminDashboard />   </ProtectedRoute>} />
       <Route path="/teacher"  element={<ProtectedRoute role="teacher"> <TeacherDashboard /> </ProtectedRoute>} />
       <Route path="/student"  element={<ProtectedRoute role="student"> <StudentDashboard /> </ProtectedRoute>} />

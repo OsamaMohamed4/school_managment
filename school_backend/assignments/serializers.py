@@ -23,12 +23,19 @@ class SubmissionSerializer(serializers.ModelSerializer):
         return None
 
     def get_file_url(self, obj):
-        if obj.file:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.file.url)
-            return obj.file.url
-        return None
+        if not obj.file:
+            return None
+        url = obj.file.url
+        if url.startswith("http"):
+            return url
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        import os
+        domain = os.environ.get("PYTHONANYWHERE_DOMAIN", "")
+        if domain:
+            return f"https://{domain}{url}"
+        return url
 
 
 class AssignmentSerializer(serializers.ModelSerializer):

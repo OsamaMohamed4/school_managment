@@ -18,7 +18,19 @@ class VideoSerializer(serializers.ModelSerializer):
     def get_teacher_name(self, obj): return obj.teacher.get_full_name()
     def get_class_name(self, obj):   return obj.class_room.name
     def get_file_url(self, obj):
+        if not obj.file:
+            return None
         req = self.context.get("request")
-        if obj.file:
-            return req.build_absolute_uri(obj.file.url) if req else obj.file.url
-        return None
+        url = obj.file.url
+        # If MEDIA_URL is already absolute (production), return as is
+        if url.startswith("http"):
+            return url
+        # Build absolute URL using request
+        if req:
+            return req.build_absolute_uri(url)
+        # Fallback: use PYTHONANYWHERE_DOMAIN if set
+        import os
+        domain = os.environ.get("PYTHONANYWHERE_DOMAIN", "")
+        if domain:
+            return f"https://{domain}{url}"
+        return url

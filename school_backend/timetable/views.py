@@ -79,7 +79,7 @@ class MyTeacherTimetableView(APIView):
 
         classes = ClassRoom.objects.filter(
             Q(teacher=request.user) | Q(id__in=subject_class_ids)
-        ).distinct()
+        ).select_related("grade").distinct()
 
         result = []
         for cls in classes:

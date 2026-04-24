@@ -36,8 +36,7 @@ INSTALLED_APPS = [
     "messaging.apps.MessagingConfig",
     "analytics.apps.AnalyticsConfig",
     "reports.apps.ReportsConfig",
-    "videos.apps.VideosConfig",
-    "lesson_plan.apps.LessonPlanConfig",
+    'videos.apps.VideosConfig',
 ]
 
 MIDDLEWARE = [
@@ -94,7 +93,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
-MEDIA_URL = "/media/"
+# MEDIA_URL set dynamically below based on environment
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -148,9 +147,15 @@ SECURE_REFERRER_POLICY      = "strict-origin-when-cross-origin"
 # ── Secret Key Warning (Security #11) ────────────────────────
 import sys as _sys
 if "django-insecure" in SECRET_KEY and not DEBUG:
-    print("⚠️  WARNING: Using insecure SECRET_KEY in production! Set SECRET_KEY in .env", file=_sys.stderr)
+    print("WARNING: Using insecure SECRET_KEY in production! Set SECRET_KEY in .env", file=_sys.stderr)
 
-
-# ── File Upload Settings ──────────────────────────────────────
-DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
+# ── Media Files for Production (PythonAnywhere) ──────────────
+# On PythonAnywhere, set PYTHONANYWHERE_DOMAIN in .env
+# Then configure: Files → /media/ → mapped to MEDIA_ROOT
+import os as _os
+_pa_domain = _os.environ.get("PYTHONANYWHERE_DOMAIN", "")
+if _pa_domain:
+    # Production: full URL for media files
+    MEDIA_URL = f"https://{_pa_domain}/media/"
+else:
+    MEDIA_URL = "/media/"

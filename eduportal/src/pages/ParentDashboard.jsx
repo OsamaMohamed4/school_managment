@@ -1,4 +1,3 @@
-import "../../src/animations.css";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -7,25 +6,246 @@ import MessagesPanel from "../components/MessagesPanel";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const NAV = [
-  { id:"overview",  label:"Overview" },
-  { id:"detail",    label:"Child Details" },
-  { id:"messages",  label:"Messages" },
+  { id:"overview", label:"Overview",      icon:"⊞" },
+  { id:"detail",   label:"Child Details", icon:"📊" },
+  { id:"messages", label:"Messages",      icon:"✉" },
 ];
+
+const S = `
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
+
+  :root {
+    --amber: #D97706;
+    --amber-light: #FBBF24;
+    --amber-soft: #FEF3C7;
+    --amber-mid: #FDE68A;
+    --bg: #FFFBEB;
+    --surface: #FFFFFF;
+    --surface2: #FAFAF9;
+    --border: #E5E7EB;
+    --border-amber: #FDE68A;
+    --text: #0F172A;
+    --muted: #64748B;
+    --faint: #94A3B8;
+    --green: #059669;
+    --blue: #2563EB;
+    --red: #EF4444;
+    --purple: #7C3AED;
+    --sidebar-w: 220px;
+    --header-h: 56px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .p-root { display: flex; min-height: 100vh; font-family: 'Sora', sans-serif; background: var(--bg); }
+
+  /* ── OVERLAY ── */
+  .p-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(3px); z-index: 40; }
+  .p-overlay.open { display: block; }
+
+  /* ── SIDEBAR ── */
+  .p-sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 1.5px solid var(--border-amber);
+    display: flex; flex-direction: column; z-index: 50;
+    transform: translateX(-100%);
+    transition: transform .28s cubic-bezier(.4,0,.2,1);
+  }
+  .p-sidebar.open { transform: translateX(0); }
+  @media (min-width: 768px) { .p-sidebar { transform: translateX(0); } }
+
+  .p-logo { display: flex; align-items: center; gap: 10px; padding: 16px 14px; border-bottom: 1.5px solid var(--amber-soft); }
+  .p-logo-icon { width: 32px; height: 32px; background: var(--amber); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .p-logo-text { font-family: 'Playfair Display',serif; font-weight: 800; font-size: 15px; color: var(--text); }
+
+  .p-user-chip { margin: 10px 10px 4px; background: var(--amber-soft); border: 1px solid var(--amber-mid); border-radius: 10px; padding: 10px 12px; }
+  .p-user-role { font-size: 10px; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: .5px; }
+  .p-user-name { font-size: 13px; font-weight: 700; color: #92400E; margin-top: 2px; }
+
+  .p-nav { flex: 1; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+  .p-nav-btn {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 12px; border-radius: 9px; border: none; background: none; width: 100%;
+    font-size: 13px; font-weight: 500; color: var(--muted);
+    cursor: pointer; font-family: 'Sora',sans-serif; transition: all .18s; text-align: left;
+  }
+  .p-nav-btn:hover { background: var(--amber-soft); color: var(--text); transform: translateX(2px); }
+  .p-nav-btn.active { background: var(--amber-soft); color: var(--amber); font-weight: 700; box-shadow: inset 3px 0 0 var(--amber); }
+  .p-nav-footer { padding: 8px 8px 12px; border-top: 1.5px solid var(--amber-soft); display: flex; flex-direction: column; gap: 2px; }
+
+  /* ── MAIN ── */
+  .p-main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+  @media (min-width: 768px) { .p-main { margin-left: var(--sidebar-w); } }
+
+  /* ── HEADER ── */
+  .p-header {
+    position: sticky; top: 0; z-index: 30; height: var(--header-h);
+    background: var(--surface); border-bottom: 1.5px solid var(--border-amber);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; gap: 12px;
+  }
+  .p-header-left { display: flex; align-items: center; gap: 10px; }
+  .p-hamburger {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; background: var(--bg);
+    border: 1.5px solid var(--border-amber); border-radius: 9px;
+    cursor: pointer; transition: all .15s;
+  }
+  .p-hamburger:hover { background: var(--amber-soft); }
+  @media (min-width: 768px) { .p-hamburger { display: none; } }
+  .p-header-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .p-avatar { width: 34px; height: 34px; background: var(--amber); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+
+  /* ── CONTENT ── */
+  .p-content { padding: 20px 16px; }
+  @media (min-width: 640px) { .p-content { padding: 24px 20px; } }
+  @media (min-width: 1024px) { .p-content { padding: 28px 28px; } }
+
+  .fade { animation: fadeUp .35s ease both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── CHILD SELECTOR ── */
+  .p-child-tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .p-child-tab {
+    padding: 8px 16px; border-radius: 10px; cursor: pointer;
+    font-size: 13px; font-weight: 700; font-family: 'Sora',sans-serif;
+    transition: all .18s; border: 1.5px solid var(--border); background: var(--surface); color: var(--muted);
+  }
+  .p-child-tab.active { background: var(--amber-soft); color: var(--amber); border-color: var(--amber-mid); }
+
+  /* ── CHILD INFO CARD ── */
+  .p-child-card {
+    background: var(--surface); border: 1.5px solid var(--border-amber);
+    border-radius: 16px; padding: 20px 16px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .p-child-avatar {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--amber-soft); border: 2.5px solid var(--amber);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: var(--amber); flex-shrink: 0;
+  }
+  .p-child-info { flex: 1; min-width: 140px; }
+  .p-child-name { font-family: 'Playfair Display',serif; font-size: 18px; font-weight: 800; color: var(--text); }
+  .p-child-meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* ── KPI ── */
+  .p-kpi-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (min-width: 480px) { .p-kpi-grid { grid-template-columns: repeat(3,1fr); } }
+
+  .p-kpi { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 18px 16px; text-align: center; transition: box-shadow .2s; }
+  .p-kpi:hover { box-shadow: 0 4px 16px rgba(217,119,6,.1); }
+  .p-kpi-val { font-family: 'Playfair Display',serif; font-size: 28px; font-weight: 800; }
+  .p-kpi-label { font-size: 12px; color: var(--muted); margin-top: 4px; font-weight: 500; }
+
+  /* ── CARD ── */
+  .p-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 20px 16px; margin-bottom: 14px; }
+  @media (min-width: 640px) { .p-card { padding: 20px; } }
+  .p-card-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+
+  /* ── QUICK ACTIONS ── */
+  .p-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-amber {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 8px 16px; border-radius: 9px; background: var(--amber-soft); color: var(--amber);
+    border: 1.5px solid var(--amber-mid); font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: 'Sora',sans-serif; transition: all .18s; white-space: nowrap;
+  }
+  .btn-amber:hover { background: var(--amber-mid); }
+  .btn-amber-solid {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 9px 18px; border-radius: 9px; background: var(--amber); color: #fff;
+    border: none; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: 'Sora',sans-serif; transition: all .18s; white-space: nowrap;
+  }
+  .btn-amber-solid:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+  .btn-amber-solid:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-blue {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 8px 16px; border-radius: 9px; background: #EFF6FF; color: var(--blue);
+    border: 1.5px solid #BFDBFE; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: 'Sora',sans-serif; transition: all .18s; white-space: nowrap;
+  }
+  .btn-blue:hover { background: #DBEAFE; }
+  .btn-green-soft {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 8px 16px; border-radius: 9px; background: #ECFDF5; color: var(--green);
+    border: 1.5px solid #A7F3D0; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: 'Sora',sans-serif; transition: all .18s; white-space: nowrap;
+  }
+  .btn-green-soft:hover { background: #D1FAE5; }
+
+  /* ── ATTENDANCE CALENDAR ── */
+  .p-att-dots { display: flex; flex-wrap: wrap; gap: 5px; }
+  .p-att-dot {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; cursor: default;
+    border: 1.5px solid;
+  }
+  .p-att-legend { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+
+  /* ── QUIZ RESULTS ── */
+  .p-quiz-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 0; border-bottom: 1px solid var(--bg); font-size: 13px; gap: 10px;
+  }
+  .p-quiz-title { color: var(--text); font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-quiz-meta  { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+
+  /* ── ASSIGNMENTS ── */
+  .p-asgn-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 0; border-bottom: 1px solid var(--bg); font-size: 13px; gap: 10px;
+    flex-wrap: wrap;
+  }
+  .p-asgn-title { font-weight: 600; color: var(--text); }
+  .p-asgn-due   { font-size: 11px; color: var(--faint); margin-top: 1px; }
+  .p-status-chip {
+    padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+
+  /* ── PBAR ── */
+  .pbar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .pfill { height: 100%; border-radius: 3px; transition: width .8s ease; }
+
+  /* ── EMPTY ── */
+  .p-empty { text-align: center; padding: 32px 16px; color: var(--faint); font-size: 13px; }
+  .p-empty-icon { font-size: 36px; margin-bottom: 10px; }
+
+  /* ── NO CHILDREN ── */
+  .p-no-children {
+    background: var(--surface); border: 1.5px solid var(--border-amber);
+    border-radius: 18px; padding: 60px 24px; text-align: center; margin-top: 20px;
+  }
+  .p-no-children-icon { font-size: 56px; margin-bottom: 16px; }
+  .p-no-children-title { font-family: 'Playfair Display',serif; font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+  .p-no-children-sub { font-size: 13px; color: var(--muted); }
+
+  /* ── SUBMITTED BANNER ── */
+  .p-submitted-banner {
+    background: #ECFDF5; border: 1.5px solid #A7F3D0; border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 14px;
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+`;
 
 export default function ParentDashboard() {
   const { user, logout } = useAuth();
   const navigate          = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tab, setTab]     = useState("overview");
-  const [children, setChildren]   = useState([]);
-  const [selChild, setSelChild]   = useState(null);
-  const [detail,   setDetail]     = useState(null);
-  const [loading,  setLoading]    = useState(true);
-  const [loadingD, setLoadingD]   = useState(false);
+
+  const [children,    setChildren]    = useState([]);
+  const [selChild,    setSelChild]    = useState(null);
+  const [detail,      setDetail]      = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingD,    setLoadingD]    = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   useEffect(()=>{
     parentAPI.children().then(d=>{
-      const kids = Array.isArray(d)?d:(d.children||d.results||[]);
+      const kids = Array.isArray(d) ? d : (d.children||d.results||[]);
       setChildren(kids);
       if (kids.length>0) setSelChild(kids[0]);
     }).catch(()=>{}).finally(()=>setLoading(false));
@@ -49,260 +269,262 @@ export default function ParentDashboard() {
   };
 
   const scoreColor = p => p>=80?"#059669":p>=60?"#D97706":"#EF4444";
+  const scoreBg    = p => p>=80?"#ECFDF5":p>=60?"#FEF3C7":"#FEF2F2";
+
+  const navTo = (id) => { setTab(id); setSidebarOpen(false); };
+  const firstName = user?.first_name || user?.full_name || "P";
 
   return (
-    <div className="page-enter" style={{fontFamily:"'DM Sans',sans-serif",display:"flex",minHeight:"100vh"}}>
-      <style>{`
-  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0;}
-  .nb{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:10px;border:none;background:none;width:100%;font-size:13px;font-weight:500;color:#64748B;cursor:pointer;font-family:'Sora',sans-serif;transition:all 0.18s ease;}
-  .nb:hover{background:#FEF3C7;color:#0F172A;transform:translateX(3px);}
-  .nb.a{background:#FEF3C7;color:#D97706;font-weight:700;box-shadow:inset 3px 0 0 #D97706;}
-  .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:'Sora',sans-serif;transition:all 0.18s;}
-  .btn:hover:not(:disabled){transform:translateY(-1px);}
-  .bp{background:#F59E0B;color:#fff;} .bp:hover{opacity:0.9;}
-  .bgh{background:#F59E0B22;color:#FBBF24;border:1px solid #F59E0B44;}
-  .bgr{background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.2);}
-  .bgs{background:rgba(16,185,129,0.15);color:#34D399;border:1px solid rgba(16,185,129,0.2);}
-  .bgl{background:rgba(255,255,255,0.06);color:#94A3B8;border:1px solid rgba(255,255,255,0.1);}
-  .card{background:#fff;border-radius:16px;padding:20px;border:1.5px solid #E2E8F0;}
-  .stat-card{background:rgba(255,255,255,0.04);border-radius:16px;padding:22px 20px;border:1px solid rgba(255,255,255,0.08);animation:fadeUp 0.5s ease both;transition:transform 0.2s,box-shadow 0.2s;}
-  .stat-card:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(0,0,0,0.3);}
-  .fade{animation:fadeUp 0.4s ease both;}
-  @keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-  .s1{animation-delay:0.05s;}.s2{animation-delay:0.1s;}.s3{animation-delay:0.15s;}.s4{animation-delay:0.2s;}
-  .inp{width:100%;padding:10px 13px;background:#fff;border:1.5px solid #E2E8F0;border-radius:10px;font-size:13px;color:#0F172A;outline:none;font-family:'Sora',sans-serif;transition:all 0.2s;}
-  .inp::placeholder{color:#475569;} .inp:focus{border-color:#F59E0B;background:rgba(255,255,255,0.08);}
-  .inp.err{border-color:#EF4444;} .ferr{color:#F87171;font-size:11px;margin-top:3px;}
-  .sel{width:100%;padding:10px 13px;background:#fff;border:1.5px solid #E2E8F0;border-radius:10px;font-size:13px;color:#0F172A;outline:none;font-family:'Sora',sans-serif;}
-  .lbl{display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;}
-  .field{margin-bottom:13px;}
-  .trow{display:grid;padding:12px 16px;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.05);color:#94A3B8;transition:background 0.15s;}
-  .trow:hover{background:rgba(255,255,255,0.03);}
-  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:100;}
-  .modal{background:#fff;border-radius:20px;padding:28px;width:440px;max-width:94vw;border:1px solid rgba(255,255,255,0.1);animation:fadeUp 0.3s ease;box-shadow:0 40px 100px rgba(0,0,0,0.5);}
-  .toast{position:fixed;bottom:22px;right:22px;padding:13px 18px;border-radius:12px;font-size:13px;font-weight:700;z-index:300;animation:slideToast 0.3s ease;font-family:'Sora',sans-serif;max-width:320px;}
-  @keyframes slideToast{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-  .ts{background:linear-gradient(135deg,#059669,#10B981);color:#fff;} .te{background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;}
-  .badge{display:inline-flex;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;}
-  .tab-btn{padding:7px 14px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);font-size:12px;font-weight:700;color:#64748B;cursor:pointer;font-family:'Sora',sans-serif;transition:all 0.18s;}
-  .tab-btn.a{background:#F59E0B22;color:#FBBF24;border-color:#F59E0B44;}
-  .sel-item{padding:11px 14px;border-radius:11px;border:1px solid rgba(255,255,255,0.08);margin-bottom:6px;cursor:pointer;background:rgba(255,255,255,0.03);transition:all 0.18s;}
-  .sel-item:hover{border-color:#F59E0B44;background:#F59E0B11;}
-  .sel-item.active{border-color:#F59E0B;background:#F59E0B18;}
-  .pbar{height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;margin-top:5px;}
-  .pfill{height:100%;border-radius:3px;transition:width 0.8s ease;}
-  .spinner{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;animation:spin .6s linear infinite;display:inline-block;}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .srow{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:7px;cursor:pointer;transition:all 0.18s;background:rgba(255,255,255,0.03);}
-  .srow:hover{border-color:#F59E0B44;} .srow.p{border-color:#10B981;background:rgba(16,185,129,0.08);} .srow.ab{border-color:#EF4444;background:rgba(239,68,68,0.08);}
-  .qcard{background:rgba(255,255,255,0.03);border-radius:11px;padding:14px 16px;border:1px solid rgba(255,255,255,0.08);margin-bottom:10px;}
-  .b-mcq{background:rgba(59,130,246,0.2);color:#60A5FA;} .b-tf{background:rgba(16,185,129,0.2);color:#34D399;} .b-sa{background:rgba(245,158,11,0.2);color:#FBBF24;}
-  .opt{width:100%;padding:11px 14px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);text-align:left;cursor:pointer;font-size:13px;color:#94A3B8;transition:all 0.2s;font-family:'Sora',sans-serif;display:flex;align-items:center;gap:10px;margin-bottom:7px;}
-  .opt:hover{border-color:#F59E0B44;background:#F59E0B11;color:#E2E8F0;} .opt.sel{border-color:#F59E0B;background:#F59E0B22;color:#FBBF24;font-weight:600;}
-  .short-inp{width:100%;padding:10px 14px;background:#fff;border:1.5px solid #E2E8F0;border-radius:9px;font-size:13px;color:#0F172A;font-family:'Sora',sans-serif;outline:none;transition:border 0.2s;}
-  .short-inp:focus{border-color:#F59E0B;}
-  .gb-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;align-items:center;padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;color:#94A3B8;}
-  .gb-row:hover{background:rgba(255,255,255,0.03);}
-  .notif-type-btn{padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);font-size:12px;font-weight:600;cursor:pointer;font-family:'Sora',sans-serif;transition:all 0.18s;color:#64748B;}
-  .tabbtn{padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);font-size:13px;font-weight:600;color:#64748B;cursor:pointer;font-family:'Sora',sans-serif;transition:all 0.18s;}
-  .tabbtn.a{background:#F59E0B22;color:#FBBF24;border-color:#F59E0B44;}
-  .unread-dot{width:18px;height:18px;background:#EF4444;border-radius:50%;font-size:10px;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;margin-left:auto;}
-  .choice-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-  .msg-item{padding:12px 14px;border-radius:11px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);cursor:pointer;transition:all .18s;margin-bottom:7px;}
-  .msg-item:hover,.msg-item.sel{border-color:#F59E0B44;background:#F59E0B11;}
-  .bubble{max-width:72%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5;word-break:break-word;}
-  .bubble.mine{background:#F59E0B;color:#fff;border-bottom-right-radius:4px;margin-left:auto;}
-  .bubble.theirs{background:rgba(255,255,255,0.08);color:#E2E8F0;border-bottom-left-radius:4px;}
-  .contact-btn{width:100%;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);cursor:pointer;font-family:'Sora',sans-serif;font-size:13px;text-align:left;transition:all .18s;margin-bottom:6px;color:#94A3B8;}
-  .contact-btn:hover{border-color:#F59E0B44;background:#F59E0B11;color:#E2E8F0;}
-  .msg-inp{flex:1;padding:10px 14px;background:#fff;border:1.5px solid #E2E8F0;border-radius:10px;font-size:13px;font-family:'Sora',sans-serif;outline:none;color:#0F172A;transition:border .2s;}
-  .msg-inp:focus{border-color:#F59E0B;}
-  .msg-inp::placeholder{color:#475569;}
-  .asgn-card{background:rgba(255,255,255,0.04);border-radius:13px;padding:16px 18px;border:1px solid rgba(255,255,255,0.08);margin-bottom:10px;cursor:pointer;transition:all .18s;}
-  .asgn-card:hover{border-color:#F59E0B44;box-shadow:0 4px 20px rgba(0,0,0,0.2);}
-  .asgn-inp{width:100%;padding:9px 12px;background:#fff;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:'Sora',sans-serif;outline:none;color:#0F172A;}
-  .asgn-inp:focus{border-color:#F59E0B;}
-  .asgn-btn{padding:8px 16px;border-radius:9px;border:none;font-weight:600;font-size:13px;cursor:pointer;font-family:'Sora',sans-serif;transition:all .18s;}
-  .tt-cell{padding:8px 10px;border-radius:9px;font-size:12px;position:relative;transition:all 0.2s;}
-  .tt-del{position:absolute;top:4px;right:4px;background:#EF4444;color:#fff;border:none;border-radius:4px;font-size:10px;padding:2px 5px;cursor:pointer;opacity:0;transition:opacity .2s;}
-  .tt-cell:hover .tt-del{opacity:1;}
-  .tt-inp{width:100%;padding:8px 11px;background:#fff;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:'Sora',sans-serif;outline:none;color:#0F172A;}
-  .tt-inp:focus{border-color:#F59E0B;}
-  .tt-sel{width:100%;padding:8px 11px;background:#fff;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:'Sora',sans-serif;color:#0F172A;outline:none;}
-`}</style>
+    <div className="p-root">
+      <style>{S}</style>
 
-      {/* Sidebar */}
-      <aside style={{width:210,background:"#fff",borderRight:"1.5px solid #FDE68A",display:"flex",flexDirection:"column",height:"100vh",position:"fixed",top:0,left:0}}>
-        <div style={{padding:"16px 14px",borderBottom:"1.5px solid #FEF3C7",display:"flex",alignItems:"center",gap:9}}>
-          <div style={{width:32,height:32,background:"#D97706",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>👨‍👩‍👦</div>
-          <span style={{fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:15,color:"#0F172A"}}>EduPortal</span>
+      <div className={`p-overlay${sidebarOpen?" open":""}`} onClick={()=>setSidebarOpen(false)}/>
+
+      {/* ── SIDEBAR ── */}
+      <aside className={`p-sidebar${sidebarOpen?" open":""}`}>
+        <div className="p-logo">
+          <div className="p-logo-icon">👨‍👩‍👦</div>
+          <span className="p-logo-text">EduPortal</span>
         </div>
-        <div style={{margin:"10px 10px 4px",background:"#FEF3C7",borderRadius:9,padding:"9px 11px",border:"1px solid #FDE68A"}}>
-          <div style={{fontSize:10,color:"#D97706",fontWeight:700,textTransform:"uppercase"}}>Parent</div>
-          <div style={{fontSize:13,fontWeight:700,color:"#92400E",marginTop:2}}>{user?.full_name||user?.first_name||"Parent"}</div>
+        <div className="p-user-chip">
+          <div className="p-user-role">Parent</div>
+          <div className="p-user-name">{user?.full_name||user?.first_name||"Parent"}</div>
         </div>
-        <nav style={{flex:1,padding:"6px 8px",display:"flex",flexDirection:"column",gap:2}}>
-          {NAV.map(n=><button key={n.id} className={`nb${tab===n.id?" a":""}`} onClick={()=>setTab(n.id)}>{n.label}</button>)}
-          <button className="nb" onClick={()=>navigate("/profile")} style={{marginTop:4}}>👤 Profile</button>
+        <nav className="p-nav">
+          {NAV.map(n=>(
+            <button key={n.id} className={`p-nav-btn${tab===n.id?" active":""}`} onClick={()=>navTo(n.id)}>
+              <span style={{fontSize:14,width:18,textAlign:"center"}}>{n.icon}</span>
+              {n.label}
+            </button>
+          ))}
+          <button className="p-nav-btn" onClick={()=>{ navigate("/profile"); setSidebarOpen(false); }}>
+            <span style={{fontSize:14,width:18,textAlign:"center"}}>👤</span> My Profile
+          </button>
         </nav>
-        <div style={{padding:"10px 8px",borderTop:"1.5px solid #FEF3C7"}}>
-          <button className="nb" style={{color:"#EF4444"}} onClick={()=>{logout();navigate("/");}}>Logout</button>
+        <div className="p-nav-footer">
+          <button className="p-nav-btn" style={{color:"var(--red)"}} onClick={()=>{logout();navigate("/");}}>
+            <span style={{fontSize:14}}>→</span> Logout
+          </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <div style={{marginLeft:210,flex:1,background:"#FFFBEB",minHeight:"100vh"}}>
-        <header style={{background:"#fff",borderBottom:"1.5px solid #FDE68A",padding:"0 24px",height:58,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
-          <h1 style={{fontSize:15,fontWeight:700,color:"#0F172A"}}>{NAV.find(n=>n.id===tab)?.label||"Parent Portal"}</h1>
-          <div style={{width:32,height:32,background:"#D97706",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:12}}>
-            {(user?.first_name||"P").charAt(0).toUpperCase()}
+      {/* ── MAIN ── */}
+      <div className="p-main">
+        <header className="p-header">
+          <div className="p-header-left">
+            <button className="p-hamburger" onClick={()=>setSidebarOpen(true)}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <span className="p-header-title">{NAV.find(n=>n.id===tab)?.label||"Parent Portal"}</span>
           </div>
+          <div className="p-avatar">{firstName.charAt(0).toUpperCase()}</div>
         </header>
 
-        <div style={{padding:22}}>
+        <div className="p-content">
 
-          {loading&&<LoadingSpinner color="#D97706" text="Loading your children's data..."/>}
+          {/* Loading */}
+          {loading && (
+            <LoadingSpinner color="#D97706" text="Loading your children's data..."/>
+          )}
 
-          {!loading&&children.length===0&&(
-            <div className="card fade" style={{textAlign:"center",padding:60}}>
-              <div style={{fontSize:48,marginBottom:16}}>👨‍👩‍👦</div>
-              <h3 style={{fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:8}}>No children linked yet</h3>
-              <p style={{fontSize:13,color:"#64748B"}}>Please ask the school admin to link your children to your account.</p>
+          {/* No children */}
+          {!loading && children.length===0 && (
+            <div className="p-no-children fade">
+              <div className="p-no-children-icon">👨‍👩‍👦</div>
+              <div className="p-no-children-title">No children linked yet</div>
+              <div className="p-no-children-sub">Please ask the school admin to link your children to your account.</div>
             </div>
           )}
 
-          {!loading&&children.length>0&&(
-
+          {/* Has children */}
+          {!loading && children.length>0 && (
             <>
-              {/* Child selector */}
-              {children.length>1&&(
-                <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
+              {/* Child selector — only if multiple */}
+              {children.length>1 && (
+                <div className="p-child-tabs">
                   {children.map(c=>(
-                    <button key={c.id} onClick={()=>setSelChild(c)}
-                      style={{padding:"8px 16px",borderRadius:10,border:`1.5px solid ${selChild?.id===c.id?"#D97706":"#E2E8F0"}`,background:selChild?.id===c.id?"#FEF3C7":"#F8FAFC",color:selChild?.id===c.id?"#D97706":"#64748B",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+                    <button key={c.id} className={`p-child-tab${selChild?.id===c.id?" active":""}`}
+                      onClick={()=>setSelChild(c)}>
                       {c.full_name}
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* OVERVIEW */}
-              {tab==="overview"&&selChild&&(
+              {/* ══ OVERVIEW ══ */}
+              {tab==="overview" && selChild && (
                 <div className="fade">
-                  {/* Child info card */}
-                  <div className="card" style={{marginBottom:14,display:"flex",alignItems:"center",gap:16}}>
-                    <div style={{width:56,height:56,borderRadius:"50%",background:"#FEF3C7",border:"2px solid #D97706",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800,color:"#D97706",flexShrink:0}}>
-                      {selChild.full_name?.charAt(0)}
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:18,fontWeight:800,color:"#0F172A",fontFamily:"'Playfair Display',serif"}}>{selChild.full_name}</div>
-                      <div style={{fontSize:13,color:"#64748B",marginTop:3}}>
-                        {selChild.grade_name&&<span>{selChild.grade_name} · </span>}
-                        {selChild.class_name&&<span>Class {selChild.class_name} · </span>}
-                        {selChild.teacher&&<span>Teacher: <strong>{selChild.teacher}</strong></span>}
+                  {/* Child info */}
+                  <div className="p-child-card">
+                    <div className="p-child-avatar">{selChild.full_name?.charAt(0)}</div>
+                    <div className="p-child-info">
+                      <div className="p-child-name">{selChild.full_name}</div>
+                      <div className="p-child-meta">
+                        {selChild.grade_name && <span>{selChild.grade_name}</span>}
+                        {selChild.class_name && <span> · Class {selChild.class_name}</span>}
+                        {selChild.teacher    && <span> · Teacher: <strong>{selChild.teacher}</strong></span>}
                       </div>
                     </div>
-                    <button onClick={handleDownloadPDF} disabled={downloading}
-                      style={{padding:"9px 16px",background:"#D97706",color:"#fff",border:"none",borderRadius:9,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
-                      {downloading?"Downloading...":"📄 Report Card PDF"}
+                    <button className="btn-amber-solid" onClick={handleDownloadPDF} disabled={downloading}>
+                      {downloading ? "Downloading..." : "📄 Report Card"}
                     </button>
                   </div>
 
-                  {/* KPI */}
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:14}}>
+                  {/* KPIs */}
+                  <div className="p-kpi-grid">
                     {[
-                      ["Attendance Rate", detail?detail.attendance?.rate+"%":"—", scoreColor(detail?.attendance?.rate||0)],
-                      ["Quiz Average",    detail?detail.quizzes?.avg_score+"%":"—", scoreColor(detail?.quizzes?.avg_score||0)],
-                      ["Total Quizzes",   detail?detail.quizzes?.total_taken:"—",  "#2563EB"],
+                      ["Attendance Rate", detail ? detail.attendance?.rate+"%" : "—", scoreColor(detail?.attendance?.rate||0)],
+                      ["Quiz Average",    detail ? detail.quizzes?.avg_score+"%" : "—", scoreColor(detail?.quizzes?.avg_score||0)],
+                      ["Total Quizzes",   detail ? detail.quizzes?.total_taken : "—",  "#2563EB"],
                     ].map(([l,v,c])=>(
-                      <div key={l} className="card" style={{textAlign:"center"}}>
-                        <div style={{fontSize:28,fontWeight:800,fontFamily:"'Playfair Display',serif",color:c}}>{v}</div>
-                        <div style={{fontSize:12,color:"#64748B",marginTop:4}}>{l}</div>
+                      <div key={l} className="p-kpi">
+                        <div className="p-kpi-val" style={{color:c}}>{v}</div>
+                        <div className="p-kpi-label">{l}</div>
                       </div>
                     ))}
                   </div>
 
                   {/* Quick actions */}
-                  <div className="card">
-                    <h4 style={{fontSize:13,fontWeight:700,marginBottom:12}}>Quick Actions</h4>
-                    <div style={{display:"flex",gap:8}}>
-                      <button onClick={()=>setTab("detail")} style={{padding:"8px 16px",background:"#EFF6FF",color:"#2563EB",border:"none",borderRadius:8,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>View Full Report →</button>
-                      {selChild.teacher_id&&<button onClick={()=>setTab("messages")} style={{padding:"8px 16px",background:"#ECFDF5",color:"#059669",border:"none",borderRadius:8,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Message Teacher →</button>}
+                  <div className="p-card">
+                    <div className="p-card-title">⚡ Quick Actions</div>
+                    <div className="p-actions">
+                      <button className="btn-blue" onClick={()=>navTo("detail")}>View Full Report →</button>
+                      {selChild.teacher_id && (
+                        <button className="btn-green-soft" onClick={()=>navTo("messages")}>Message Teacher →</button>
+                      )}
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* DETAIL */}
-              {tab==="detail"&&(
-                <div className="fade">
-                  {loadingD?<LoadingSpinner color="#D97706" text="Loading details..."/>
-                  :!detail?<div className="card" style={{textAlign:"center",color:"#94A3B8",padding:40}}>No data available.</div>
-                  :(
-                    <>
-                      {/* Attendance recent */}
-                      <div className="card" style={{marginBottom:14}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                          <h4 style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>📅 Recent Attendance (last 30 days)</h4>
-                          <span style={{fontSize:13,fontWeight:700,color:scoreColor(detail.attendance?.rate)}}>{detail.attendance?.rate}% rate</span>
-                        </div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                          {detail.attendance?.records?.map((r,i)=>(
-                            <div key={i} title={r.date} style={{width:28,height:28,borderRadius:6,background:r.status==="present"?"#ECFDF5":r.status==="absent"?"#FEF2F2":"#FEF3C7",border:`1.5px solid ${r.status==="present"?"#A7F3D0":r.status==="absent"?"#FECACA":"#FDE68A"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,title:r.date}}>
-                              {r.status==="present"?"✓":r.status==="absent"?"✗":"~"}
-                            </div>
-                          ))}
-                          {(!detail.attendance?.records||detail.attendance.records.length===0)&&<p style={{fontSize:13,color:"#94A3B8"}}>No attendance records yet.</p>}
-                        </div>
-                        <div style={{display:"flex",gap:14,marginTop:10,fontSize:11,color:"#64748B"}}>
-                          <span>✓ Present</span><span>✗ Absent</span><span>~ Late</span>
-                        </div>
+                  {/* Recent attendance preview */}
+                  {detail?.attendance?.records?.length>0 && (
+                    <div className="p-card">
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                        <div className="p-card-title" style={{marginBottom:0}}>📅 Recent Attendance</div>
+                        <span style={{fontWeight:700,fontSize:13,color:scoreColor(detail.attendance?.rate)}}>{detail.attendance?.rate}% rate</span>
                       </div>
-
-                      {/* Quiz results */}
-                      <div className="card" style={{marginBottom:14}}>
-                        <h4 style={{fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:14}}>📝 Quiz Results</h4>
-                        {!detail.quizzes?.attempts?.length?<p style={{fontSize:13,color:"#94A3B8"}}>No quiz attempts yet.</p>
-                        :<div style={{overflowX:"auto"}}>
-                          {detail.quizzes?.attempts?.map((q,i)=>(
-                            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #F1F5F9",fontSize:13}}>
-                              <span style={{color:"#0F172A",fontWeight:500}}>{q.quiz_title}</span>
-                              <div style={{display:"flex",gap:12,alignItems:"center"}}>
-                                <span style={{color:"#64748B"}}>{q.score}/{q.total_points}</span>
-                                <span style={{fontWeight:700,color:scoreColor(q.percentage)}}>{q.percentage}%</span>
-                                <span style={{fontSize:11,color:"#94A3B8"}}>{q.submitted_at}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>}
+                      <div className="p-att-dots">
+                        {detail.attendance.records.slice(0,20).map((r,i)=>(
+                          <div key={i} title={r.date} className="p-att-dot"
+                            style={{
+                              background: r.status==="present"?"#ECFDF5":r.status==="absent"?"#FEF2F2":"#FEF3C7",
+                              borderColor: r.status==="present"?"#A7F3D0":r.status==="absent"?"#FECACA":"#FDE68A",
+                              color: r.status==="present"?"#059669":r.status==="absent"?"#EF4444":"#D97706",
+                            }}>
+                            {r.status==="present"?"✓":r.status==="absent"?"✗":"~"}
+                          </div>
+                        ))}
                       </div>
-
-                      {/* Assignments */}
-                      {detail.assignments?.length>0&&(
-                        <div className="card">
-                          <h4 style={{fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:14}}>📋 Assignments</h4>
-                          {detail.assignments.map((a,i)=>(
-                            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #F1F5F9",fontSize:13}}>
-                              <div>
-                                <div style={{fontWeight:600,color:"#0F172A"}}>{a.title}</div>
-                                <div style={{fontSize:11,color:"#94A3B8"}}>Due: {a.due_date}</div>
-                              </div>
-                              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                                {a.score!=null&&<span style={{fontWeight:700,color:scoreColor(a.score/a.max_score*100)}}>{a.score}/{a.max_score}</span>}
-                                <span style={{padding:"2px 10px",borderRadius:999,fontSize:11,fontWeight:700,background:a.status==="graded"?"#ECFDF5":a.status==="submitted"?"#EFF6FF":a.status==="late"?"#FEF2F2":"#F1F5F9",color:a.status==="graded"?"#059669":a.status==="submitted"?"#2563EB":a.status==="late"?"#EF4444":"#64748B"}}>{a.status}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
+                      <div className="p-att-legend">
+                        <span>✓ Present</span><span>✗ Absent</span><span>~ Late</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* MESSAGES */}
-              {tab==="messages"&&(
+              {/* ══ DETAIL ══ */}
+              {tab==="detail" && (
+                <div className="fade">
+                  {loadingD
+                    ? <LoadingSpinner color="#D97706" text="Loading details..."/>
+                    : !detail
+                      ? <div className="p-card"><div className="p-empty">No data available.</div></div>
+                      : (
+                        <>
+                          {/* Attendance full */}
+                          <div className="p-card">
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+                              <div className="p-card-title" style={{marginBottom:0}}>📅 Attendance (last 30 days)</div>
+                              <span style={{fontSize:13,fontWeight:700,color:scoreColor(detail.attendance?.rate)}}>{detail.attendance?.rate}% rate</span>
+                            </div>
+                            <div className="p-att-dots">
+                              {detail.attendance?.records?.map((r,i)=>(
+                                <div key={i} title={r.date} className="p-att-dot"
+                                  style={{
+                                    background: r.status==="present"?"#ECFDF5":r.status==="absent"?"#FEF2F2":"#FEF3C7",
+                                    borderColor: r.status==="present"?"#A7F3D0":r.status==="absent"?"#FECACA":"#FDE68A",
+                                    color: r.status==="present"?"#059669":r.status==="absent"?"#EF4444":"#D97706",
+                                  }}>
+                                  {r.status==="present"?"✓":r.status==="absent"?"✗":"~"}
+                                </div>
+                              ))}
+                            </div>
+                            {(!detail.attendance?.records||detail.attendance.records.length===0) && (
+                              <div className="p-empty">No attendance records yet.</div>
+                            )}
+                            <div className="p-att-legend">
+                              <span>✓ Present</span><span>✗ Absent</span><span>~ Late</span>
+                            </div>
+                          </div>
+
+                          {/* Quiz results */}
+                          <div className="p-card">
+                            <div className="p-card-title">📝 Quiz Results</div>
+                            {!detail.quizzes?.attempts?.length
+                              ? <div className="p-empty">No quiz attempts yet.</div>
+                              : detail.quizzes.attempts.map((q,i)=>(
+                                <div key={i} className="p-quiz-row">
+                                  <span className="p-quiz-title">{q.quiz_title}</span>
+                                  <div className="p-quiz-meta">
+                                    <span style={{color:"var(--muted)"}}>{q.score}/{q.total_points}</span>
+                                    <span style={{fontWeight:700,color:scoreColor(q.percentage)}}>{q.percentage}%</span>
+                                    <span style={{fontSize:11,color:"var(--faint)"}}>{q.submitted_at}</span>
+                                  </div>
+                                </div>
+                              ))
+                            }
+                          </div>
+
+                          {/* Assignments */}
+                          {detail.assignments?.length>0 && (
+                            <div className="p-card">
+                              <div className="p-card-title">📋 Assignments</div>
+                              {detail.assignments.map((a,i)=>(
+                                <div key={i} className="p-asgn-row">
+                                  <div style={{minWidth:0}}>
+                                    <div className="p-asgn-title">{a.title}</div>
+                                    <div className="p-asgn-due">Due: {a.due_date}</div>
+                                  </div>
+                                  <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+                                    {a.score!=null && (
+                                      <span style={{fontWeight:700,color:scoreColor(a.score/a.max_score*100)}}>
+                                        {a.score}/{a.max_score}
+                                      </span>
+                                    )}
+                                    <span className="p-status-chip" style={{
+                                      background: a.status==="graded"?"#ECFDF5":a.status==="submitted"?"#EFF6FF":a.status==="late"?"#FEF2F2":"#F1F5F9",
+                                      color: a.status==="graded"?"#059669":a.status==="submitted"?"#2563EB":a.status==="late"?"#EF4444":"#64748B"
+                                    }}>
+                                      {a.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Download PDF button */}
+                          <div className="p-card">
+                            <div className="p-card-title">📄 Report Card</div>
+                            <p style={{fontSize:13,color:"var(--muted)",marginBottom:14}}>
+                              Download a full PDF report card for {selChild?.full_name}.
+                            </p>
+                            <button className="btn-amber-solid" onClick={handleDownloadPDF} disabled={downloading}>
+                              {downloading ? "Downloading..." : "📄 Download PDF Report Card"}
+                            </button>
+                          </div>
+                        </>
+                      )
+                  }
+                </div>
+              )}
+
+              {/* ══ MESSAGES ══ */}
+              {tab==="messages" && (
                 <div className="fade">
                   <MessagesPanel accentColor="#D97706" accentBg="#FEF3C7"/>
                 </div>
