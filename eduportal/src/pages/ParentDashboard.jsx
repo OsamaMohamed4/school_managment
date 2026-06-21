@@ -1,14 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { parentAPI, reportsAPI } from "../api";
+import { parentAPI, reportsAPI, notificationsAPI } from "../api";
 import MessagesPanel from "../components/MessagesPanel";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const NAV = [
-  { id:"overview", label:"Overview",      icon:"⊞" },
-  { id:"detail",   label:"Child Details", icon:"📊" },
-  { id:"messages", label:"Messages",      icon:"✉" },
+  { id:"overview",       label:"Overview",       icon:"⊞" },
+  { id:"detail",         label:"Child Details",  icon:"📊" },
+  { id:"notifications",  label:"Notifications",  icon:"🔔" },
+  { id:"messages",       label:"Messages",       icon:"✉" },
+];
+
+const NOTIF_TYPES = [
+  { value:"info",    color:"#2563EB", bg:"#EFF6FF" },
+  { value:"warning", color:"#D97706", bg:"#FEF3C7" },
+  { value:"success", color:"#059669", bg:"#ECFDF5" },
 ];
 
 const S = `
@@ -209,6 +216,11 @@ const S = `
   .pbar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 4px; }
   .pfill { height: 100%; border-radius: 3px; transition: width .8s ease; }
 
+  /* ── NOTIFICATIONS ── */
+  .p-notif-item { padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; border: 1.5px solid; }
+  .p-notif-item.unread { border-color: var(--amber-mid); background: var(--amber-soft); }
+  .p-notif-item.read   { border-color: var(--border);    background: var(--bg); }
+
   /* ── EMPTY ── */
   .p-empty { text-align: center; padding: 32px 16px; color: var(--faint); font-size: 13px; }
   .p-empty-icon { font-size: 36px; margin-bottom: 10px; }
@@ -242,6 +254,17 @@ export default function ParentDashboard() {
   const [loading,     setLoading]     = useState(true);
   const [loadingD,    setLoadingD]    = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  const [inboxNotifs, setInboxNotifs] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const markAllRead = async () => {
+    try { await notificationsAPI.markAllRead(); setInboxNotifs(n=>n.map(x=>({...x,is_read:true}))); setUnreadCount(0); } catch{}
+  };
+
+  useEffect(()=>{
+    notificationsAPI.list().then(d=>{ setInboxNotifs(d.notifications||[]); setUnreadCount(d.unread||0); }).catch(()=>{});
+  },[]);
 
   useEffect(()=>{
     parentAPI.children().then(d=>{
@@ -321,7 +344,20 @@ export default function ParentDashboard() {
             </button>
             <span className="p-header-title">{NAV.find(n=>n.id===tab)?.label||"Parent Portal"}</span>
           </div>
-          <div className="p-avatar">{firstName.charAt(0).toUpperCase()}</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>{setTab("notifications");markAllRead();}}
+              style={{position:"relative",background:"none",border:"none",cursor:"pointer",fontSize:20,padding:4,lineHeight:1}}>
+              🔔
+              {unreadCount>0 && (
+                <span style={{position:"absolute",top:-2,right:-2,background:"#EF4444",color:"#fff",
+                  borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:800,
+                  display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                  {unreadCount>9?"9+":unreadCount}
+                </span>
+              )}
+            </button>
+            <div className="p-avatar">{firstName.charAt(0).toUpperCase()}</div>
+          </div>
         </header>
 
         <div className="p-content">
@@ -520,6 +556,63 @@ export default function ParentDashboard() {
                         </>
                       )
                   }
+                </div>
+              )}
+
+              {/* ══ NOTIFICATIONS ══ */}
+              {tab==="notifications" && (
+                <div className="fade">
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+                    <div style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>
+                      🔔 My Notifications
+                      {unreadCount>0 && (
+                        <span style={{marginLeft:8,background:"#EF4444",color:"#fff",
+                          borderRadius:999,fontSize:10,fontWeight:800,padding:"2px 8px"}}>
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+                    {unreadCount>0 && (
+                      <button className="btn-amber" style={{fontSize:12,padding:"6px 12px"}} onClick={markAllRead}>
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  {inboxNotifs.length===0 ? (
+                    <div className="p-card">
+                      <div className="p-empty">
+                        <div className="p-empty-icon">📭</div>
+                        No notifications yet.
+                      </div>
+                    </div>
+                  ) : inboxNotifs.map(n=>{
+                    const nt = NOTIF_TYPES.find(t=>t.value===n.notif_type);
+                    return (
+                      <div key={n.id} className={`p-notif-item ${n.is_read?"read":"unread"}`}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:999,
+                              background:nt?.bg||"var(--bg)",color:nt?.color||"var(--muted)"}}>
+                              {n.notif_type}
+                            </span>
+                            <span style={{fontWeight:700,fontSize:13,color:"var(--text)"}}>{n.title}</span>
+                            {!n.is_read && <span style={{width:7,height:7,borderRadius:"50%",background:"#EF4444",display:"inline-block",flexShrink:0}}/>}
+                          </div>
+                          <span style={{fontSize:11,color:"var(--faint)",whiteSpace:"nowrap"}}>
+                            {new Date(n.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p style={{fontSize:12,color:"var(--muted)",lineHeight:1.5,marginBottom:n.file_url?6:0}}>{n.message}</p>
+                        {n.file_url && (
+                          <a href={n.file_url} target="_blank" rel="noreferrer"
+                            style={{fontSize:11,color:"var(--amber)",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+                            📎 View Attachment
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

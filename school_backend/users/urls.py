@@ -20,6 +20,6 @@ urlpatterns = [
     path("auth/parent/child/<int:child_id>/", ParentChildDetailView.as_view(), name="parent-child-detail"),
     path("auth/parent/link-child/",           ParentLinkChildView.as_view(),   name="parent-link-child"),
     path("auth/admin/parent/<int:parent_id>/children/", AdminParentChildrenView.as_view(), name="admin-parent-children"),
-    path("stats/", UsersStatsView.as_view(), name="users-stats"),
+    path("auth/stats/", UsersStatsView.as_view(), name="users-stats"),
     path("", include(router.urls)),
 ]

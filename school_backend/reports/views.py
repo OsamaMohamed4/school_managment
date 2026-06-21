@@ -232,3 +232,186 @@ class ClassAttendanceReportView(APIView):
 
         except ImportError:
             return Response({"note": "Install reportlab: pip install reportlab"})
+
+
+class TeacherTimetablePDFView(APIView):
+    """GET /api/reports/teacher/timetable/pdf/  — Teacher's personal schedule as Arabic PDF grid"""
+
+    def get(self, request):
+        if request.user.role != "teacher":
+            return Response({"error": "Teachers only."}, status=403)
+
+        teacher = request.user
+        from timetable.models import TimetableSlot
+        from django.db.models import Q
+
+        subject_entries = list(ClassSubjectTeacher.objects.filter(
+            teacher=teacher
+        ).select_related("class_room__grade"))
+
+        q = Q()
+        for entry in subject_entries:
+            q |= Q(class_room_id=entry.class_room_id, subject__iexact=entry.subject)
+
+        assigned_class_ids = {e.class_room_id for e in subject_entries}
+        extra_classes = ClassRoom.objects.filter(teacher=teacher).exclude(id__in=assigned_class_ids)
+        if extra_classes.exists():
+            q |= Q(class_room__in=extra_classes, teacher_name=teacher.get_full_name())
+
+        if not subject_entries and not extra_classes.exists():
+            slots = TimetableSlot.objects.none()
+        else:
+            slots = TimetableSlot.objects.filter(q).select_related("class_room__grade")
+
+        DAYS_ORDER = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+        AR_DAYS = {
+            "sun": "الأحد",    "mon": "الإثنين", "tue": "الثلاثاء",
+            "wed": "الأربعاء", "thu": "الخميس",  "fri": "الجمعة",
+            "sat": "السبت",
+        }
+        AR_PERIODS = {
+            1: "الأولى",   2: "الثانية",  3: "الثالثة",
+            4: "الرابعة",  5: "الخامسة",  6: "السادسة",
+            7: "السابعة",
+        }
+
+        used_days    = set()
+        used_periods = set()
+        grid = {}
+        for s in slots:
+            used_days.add(s.day)
+            used_periods.add(s.period)
+            grid.setdefault(s.day, {})[s.period] = s.class_room.name
+
+        active_days  = [d for d in DAYS_ORDER if d in used_days]
+        periods_asc  = sorted(used_periods) if used_periods else list(range(1, 8))
+        # Reverse periods so الأولى appears on the right (RTL visual order)
+        periods_rtl  = list(reversed(periods_asc))
+        total_slots  = sum(len(v) for v in grid.values())
+        subjects     = list({e.subject for e in subject_entries})
+
+        try:
+            import os
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib import colors
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import cm
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+
+            # Register Arabic font (Arial has full Arabic Unicode coverage)
+            font_path = os.path.join(os.path.dirname(__file__), "fonts", "arial.ttf")
+            pdfmetrics.registerFont(TTFont("Arabic", font_path))
+
+            def ar(text):
+                """Reshape and apply bidi to Arabic text for correct ReportLab rendering."""
+                if not text:
+                    return text
+                reshaped = arabic_reshaper.reshape(str(text))
+                return get_display(reshaped)
+
+            buf = io.BytesIO()
+            doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                                    topMargin=1.8*cm, bottomMargin=1.8*cm,
+                                    leftMargin=1.5*cm, rightMargin=1.5*cm)
+
+            AR_FONT     = "Arabic"
+            TEAL_DARK   = colors.HexColor("#0D9488")
+            TEAL_LIGHT  = colors.HexColor("#CCFBF1")
+            TEAL_MID    = colors.HexColor("#99F6E4")
+            ROW_ALT     = colors.HexColor("#F0FDFA")
+            BORDER_CLR  = colors.HexColor("#5EEAD4")
+            WHITE       = colors.white
+
+            story = []
+
+            # ── Title ────────────────────────────────────────────────────────────────
+            title_st = ParagraphStyle("arTitle",
+                fontName=AR_FONT, fontSize=22, leading=30,
+                alignment=1, spaceAfter=8, textColor=TEAL_DARK)
+            info_st = ParagraphStyle("arInfo",
+                fontName=AR_FONT, fontSize=13, leading=18,
+                alignment=1, spaceAfter=4, textColor=colors.HexColor("#1F2937"))
+
+            story.append(Paragraph(ar("جدول حصص المعلم"), title_st))
+            story.append(Spacer(1, 0.2*cm))
+
+            # Header info row
+            teacher_ar = ar(f"{teacher.get_full_name()}  /  المعلم")
+            subject_ar = ar(f"{'، '.join(subjects) if subjects else '—'}  /  المادة")
+            count_ar   = ar(f"{total_slots}  /  عدد الحصص")
+            story.append(Paragraph(teacher_ar, info_st))
+            story.append(Paragraph(subject_ar, info_st))
+            story.append(Paragraph(count_ar,   info_st))
+            story.append(Spacer(1, 0.5*cm))
+
+            if not active_days:
+                empty_st = ParagraphStyle("e", fontName=AR_FONT, fontSize=13, alignment=1)
+                story.append(Paragraph(ar("لا توجد حصص مسجلة لهذا المعلم"), empty_st))
+            else:
+                # ── Build table data (RTL: day label on RIGHT = last column) ────────
+                # Column layout: [P7 data … P1 data | Day name]
+                # Visual (RTL read): Day name | P1 … P7
+                corner = ar("اليوم \\ الحصة")
+                header_row = [ar(AR_PERIODS.get(p, f"P{p}")) for p in periods_rtl] + [corner]
+
+                rows = [header_row]
+                for day in active_days:
+                    row = [grid.get(day, {}).get(p, "") for p in periods_rtl]
+                    row.append(ar(AR_DAYS[day]))
+                    rows.append(row)
+
+                n_per = len(periods_rtl)
+                day_col_w = 3.2 * cm
+                avail_w   = 26.5 * cm - day_col_w
+                per_col_w = min(3.0 * cm, avail_w / n_per)
+                col_widths = [per_col_w] * n_per + [day_col_w]
+                row_heights = [1.1 * cm] + [1.4 * cm] * len(active_days)
+
+                tbl = Table(rows, colWidths=col_widths, rowHeights=row_heights)
+                tbl.setStyle(TableStyle([
+                    # Header row
+                    ("BACKGROUND",    (0, 0), (-1, 0), TEAL_DARK),
+                    ("TEXTCOLOR",     (0, 0), (-1, 0), WHITE),
+                    ("FONTNAME",      (0, 0), (-1, 0), AR_FONT),
+                    ("FONTSIZE",      (0, 0), (-1, 0), 12),
+                    # Day-name column (last column)
+                    ("BACKGROUND",    (-1, 1), (-1, -1), TEAL_LIGHT),
+                    ("FONTNAME",      (-1, 1), (-1, -1), AR_FONT),
+                    ("FONTSIZE",      (-1, 1), (-1, -1), 13),
+                    # Data cells
+                    ("FONTNAME",      (0, 1), (-2, -1), AR_FONT),
+                    ("FONTSIZE",      (0, 1), (-2, -1), 12),
+                    # Alignment
+                    ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+                    # Alternating rows
+                    ("ROWBACKGROUNDS",(0, 1), (-2, -1), [WHITE, ROW_ALT]),
+                    # Grid
+                    ("GRID",          (0, 0), (-1, -1), 0.8, BORDER_CLR),
+                    ("BOX",           (0, 0), (-1, -1), 1.5, TEAL_DARK),
+                    # Padding
+                    ("TOPPADDING",    (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]))
+                story.append(tbl)
+
+            # Footer date
+            date_st = ParagraphStyle("dt", fontName=AR_FONT, fontSize=10,
+                                     alignment=1, spaceBefore=10,
+                                     textColor=colors.HexColor("#6B7280"))
+            story.append(Spacer(1, 0.3*cm))
+            story.append(Paragraph(ar(f"تاريخ الطباعة: {timezone.now().strftime('%Y-%m-%d')}"), date_st))
+
+            doc.build(story)
+            buf.seek(0)
+            fname = f"jadwal_{teacher.get_full_name().replace(' ', '_')}.pdf"
+            resp  = HttpResponse(buf.read(), content_type="application/pdf")
+            resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+            return resp
+
+        except ImportError as e:
+            return Response({"note": f"Missing dependency: {e}. Run: pip install reportlab arabic-reshaper python-bidi"})

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+school_backend/db.sqlite3
+school_backend/media/
+
+# React/Node
+eduportal/node_modules/
+eduportal/build/
+eduportal/dist/
+eduportal/.env
+eduportal/.env.local
+npm-debug.log*
+
+# OS / IDEs
+.vscode/
+.idea/
+Thumbs.db

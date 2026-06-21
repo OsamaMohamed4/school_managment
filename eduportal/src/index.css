@@ -7,9 +7,11 @@
 
 html, body, #root {
   min-height: 100vh;
-  background: #F1F5F9;
   font-family: 'Sora', 'DM Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+html, body {
+  background: #F1F5F9;
 }
 
 /* Scrollbar */

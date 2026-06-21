@@ -8,7 +8,7 @@ const ROLE_COLOR = { admin:"#2563EB", teacher:"#059669", student:"#7C3AED", pare
 const ROLE_BG    = { admin:"#EFF6FF", teacher:"#ECFDF5", student:"#F5F3FF", parent:"#FEF3C7" };
 
 export default function ProfilePage() {
-  const { user, login, logout, updateUser } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const color    = ROLE_COLOR[user?.role] || "#2563EB";
   const bg       = ROLE_BG[user?.role]    || "#EFF6FF";
@@ -28,6 +28,15 @@ export default function ProfilePage() {
 
   const [toast, setToast] = useState(null);
   const showToast = (msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+
+  useEffect(()=>{
+    document.body.style.background = "#0F172A";
+    document.documentElement.style.background = "#0F172A";
+    return () => {
+      document.body.style.background = "";
+      document.documentElement.style.background = "";
+    };
+  },[]);
 
   useEffect(()=>{
     authAPI.me().then(d=>{
@@ -157,7 +166,7 @@ export default function ProfilePage() {
         <span className="page-enter" style={{fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:15,color:"#F1F5F9"}}>EduPortal</span>
       </header>
 
-      <div style={{maxWidth:600,margin:"32px auto",padding:"0 16px"}}>
+      <div style={{maxWidth:600,margin:"32px auto",padding:"0 16px 48px"}}>
 
         {/* Avatar + name */}
         <div style={{background:"rgba(255,255,255,0.04)",borderRadius:18,padding:28,border:"1px solid rgba(255,255,255,0.08)",marginBottom:16,textAlign:"center"}}>
@@ -178,8 +187,8 @@ export default function ProfilePage() {
           {!editing?(
             <div style={{display:"grid",gap:10}}>
               {[["Email",profile.email],["First Name",profile.first_name],["Last Name",profile.last_name]].map(([l,v])=>(
-                <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"10px 14px",background:"#F8FAFC",borderRadius:9,fontSize:13}}>
-                  <span style={{color:"#64748B",fontWeight:600}}>{l}</span>
+                <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,fontSize:13}}>
+                  <span style={{color:"#94A3B8",fontWeight:600}}>{l}</span>
                   <span style={{color:"#F1F5F9",fontWeight:500}}>{v}</span>
                 </div>
               ))}

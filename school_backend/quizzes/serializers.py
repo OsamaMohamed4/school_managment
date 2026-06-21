@@ -19,24 +19,30 @@ class ChoiceStudentSerializer(serializers.ModelSerializer):
 # ── Questions ─────────────────────────────────────────────────
 class QuestionSerializer(serializers.ModelSerializer):
     """Full question for teacher"""
-    choices = ChoiceSerializer(many=True, required=False)
+    choices   = ChoiceSerializer(many=True, required=False)
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model  = Question
         fields = ["id", "text", "question_type", "points", "order",
-                  "correct_answer_text", "choices"]
+                  "correct_answer_text", "choices", "image", "image_url"]
+        extra_kwargs = {"image": {"required": False, "allow_null": True}}
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        return request.build_absolute_uri(url) if request else url
 
     def create(self, validated_data):
         choices_data = validated_data.pop("choices", [])
         question     = Question.objects.create(**validated_data)
 
-        # Auto-create True/False choices
-        # Both start as False — teacher must specify correct answer via correct_answer_text
         if question.question_type == Question.TYPE_TF and not choices_data:
             correct = (question.correct_answer_text or "").strip().lower()
             true_correct  = correct in ("true", "صح", "صحيح", "1", "yes")
             false_correct = correct in ("false", "غلط", "خطأ", "0", "no")
-            # If neither specified, default: teacher must pick — set both false
             Choice.objects.create(question=question, text="True",  is_correct=true_correct)
             Choice.objects.create(question=question, text="False", is_correct=false_correct)
         else:
@@ -47,11 +53,19 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 class QuestionStudentSerializer(serializers.ModelSerializer):
     """For students — hides correct answers"""
-    choices = ChoiceStudentSerializer(many=True, read_only=True)
+    choices   = ChoiceStudentSerializer(many=True, read_only=True)
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model  = Question
-        fields = ["id", "text", "question_type", "points", "order", "choices"]
+        fields = ["id", "text", "question_type", "points", "order", "choices", "image_url"]
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        return request.build_absolute_uri(url) if request else url
 
 
 # ── Quiz ──────────────────────────────────────────────────────

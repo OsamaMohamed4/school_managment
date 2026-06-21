@@ -38,14 +38,28 @@ class QuizViewSet(ModelViewSet):
     # POST /quizzes/{id}/add-question/
     @action(detail=True, methods=["post"], url_path="add-question")
     def add_question(self, request, pk=None):
+        import json as _json
         quiz = self.get_object()
-        # auto-set order
         last_order = quiz.questions.count()
-        data = {**request.data, "order": last_order}
-        serializer = QuestionSerializer(data=data)
+
+        # QueryDict spreads as lists via {**qd}; use .dict() to get flat strings
+        data = request.data.dict() if hasattr(request.data, "dict") else dict(request.data)
+        data["order"] = last_order
+
+        # multipart sends choices as JSON string — parse it back to list
+        if "choices" in data and isinstance(data["choices"], str):
+            try:
+                data["choices"] = _json.loads(data["choices"])
+            except (_json.JSONDecodeError, TypeError):
+                data["choices"] = []
+
+        if "image" in request.FILES:
+            data["image"] = request.FILES["image"]
+
+        serializer = QuestionSerializer(data=data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        serializer.save(quiz=quiz)
-        return Response(serializer.data, status=201)
+        instance = serializer.save(quiz=quiz)
+        return Response(QuestionSerializer(instance, context={"request": request}).data, status=201)
 
     # DELETE /quizzes/{id}/delete-question/{q_id}/
     @action(detail=True, methods=["delete"], url_path="delete-question/(?P<q_id>[0-9]+)")

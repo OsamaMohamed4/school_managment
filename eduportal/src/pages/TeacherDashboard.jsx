@@ -417,6 +417,8 @@ export default function TeacherDashboard() {
     choices:[{text:"",is_correct:true},{text:"",is_correct:false},{text:"",is_correct:false},{text:"",is_correct:false}]
   });
   const [addingQ,    setAddingQ]    = useState(false);
+  const [qImage,     setQImage]     = useState(null);
+  const [qImagePreview, setQImagePreview] = useState(null);
   const [quizResults,setQuizResults]= useState([]);
 
   // ── Notifications ────────────────────────────────────────
@@ -428,6 +430,9 @@ export default function TeacherDashboard() {
   const [sentHistory,  setSentHistory]  = useState([]);
   const [notifFile,    setNotifFile]    = useState(null);
   const [filePreview,  setFilePreview]  = useState(null);
+  // received
+  const [inboxNotifs,  setInboxNotifs]  = useState([]);
+  const [unreadCount,  setUnreadCount]  = useState(0);
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
@@ -442,7 +447,10 @@ export default function TeacherDashboard() {
     finally { setLoadingQ(false); }
   },[]);
 
-  useEffect(()=>{ loadClasses(); loadQuizzes(); },[loadClasses, loadQuizzes]);
+  useEffect(()=>{
+    loadClasses(); loadQuizzes();
+    notificationsAPI.list().then(d=>{ setInboxNotifs(d.notifications||[]); setUnreadCount(d.unread||0); }).catch(()=>{});
+  },[loadClasses, loadQuizzes]);
 
   useEffect(()=>{
     if (!selClass) return;
@@ -500,10 +508,11 @@ export default function TeacherDashboard() {
     }
     setAddingQ(true);
     try {
-      await quizzesAPI.addQuestion(selQuiz.id, payload);
+      await quizzesAPI.addQuestion(selQuiz.id, payload, qImage||null);
       showToast("Question added!");
       setNewQ({ text:"", question_type:"mcq", points:1, correct_answer_text:"",
         choices:[{text:"",is_correct:true},{text:"",is_correct:false},{text:"",is_correct:false},{text:"",is_correct:false}] });
+      setQImage(null); setQImagePreview(null);
       const updated=await quizzesAPI.list(); const list=Array.isArray(updated)?updated:(updated.results||[]);
       setQuizzes(list); setSelQuiz(list.find(q=>q.id===selQuiz.id)||selQuiz);
     } catch { showToast("Failed","error"); }
@@ -542,6 +551,10 @@ export default function TeacherDashboard() {
     setNotifFile(f);
     if (['jpg','jpeg','png','webp'].includes(ext)) setFilePreview(URL.createObjectURL(f));
     else setFilePreview(null);
+  };
+
+  const markAllRead = async () => {
+    try { await notificationsAPI.markAllRead(); setInboxNotifs(n=>n.map(x=>({...x,is_read:true}))); setUnreadCount(0); } catch{}
   };
 
   const handleSendNotif = async () => {
@@ -627,7 +640,20 @@ export default function TeacherDashboard() {
             </button>
             <span className="t-header-title">{NAV_ITEMS.find(n=>n.id===tab)?.label||tab}</span>
           </div>
-          <div className="t-avatar">{firstName.charAt(0).toUpperCase()}</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>{setTab("notifications");markAllRead();}}
+              style={{position:"relative",background:"none",border:"none",cursor:"pointer",fontSize:20,padding:4,lineHeight:1}}>
+              🔔
+              {unreadCount>0 && (
+                <span style={{position:"absolute",top:-2,right:-2,background:"#EF4444",color:"#fff",
+                  borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:800,
+                  display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                  {unreadCount>9?"9+":unreadCount}
+                </span>
+              )}
+            </button>
+            <div className="t-avatar">{firstName.charAt(0).toUpperCase()}</div>
+          </div>
         </header>
 
         <div className="t-content">
@@ -662,7 +688,7 @@ export default function TeacherDashboard() {
                       </div>
                       <div className="t-class-btns">
                         <button className="btn-ghost" style={{fontSize:12}} onClick={()=>{setSelClass(c);setTab("attendance");}}>Attendance</button>
-                        <button className="btn-ghost" style={{fontSize:12}} onClick={()=>loadReport(c)}>Report</button>
+                        <button className="btn-ghost" style={{fontSize:12}} onClick={()=>{loadReport(c);setTab("reports");}}>Report</button>
                       </div>
                     </div>
                   ))
@@ -831,6 +857,11 @@ export default function TeacherDashboard() {
                                 <span style={{fontSize:11,color:"var(--faint)"}}>{q.points} pt{q.points>1?"s":""}</span>
                               </div>
                               <p style={{fontSize:13,color:"var(--text)",marginBottom:6}}>{q.text}</p>
+                              {q.image_url && (
+                                <img src={q.image_url} alt="question"
+                                  style={{maxWidth:260,maxHeight:180,borderRadius:8,objectFit:"contain",
+                                    border:"1px solid var(--border)",marginBottom:6,display:"block"}}/>
+                              )}
                               {q.question_type==="short_answer"&&q.correct_answer_text&&(
                                 <p style={{fontSize:12,color:"#059669"}}>✓ {q.correct_answer_text}</p>
                               )}
@@ -863,6 +894,38 @@ export default function TeacherDashboard() {
                       <textarea className="t-input" rows={3} value={newQ.text}
                         onChange={e=>setNewQ(q=>({...q,text:e.target.value}))} style={{resize:"vertical"}}/>
                     </div>
+
+                    {/* Image upload */}
+                    <div className="t-field">
+                      <label className="t-label">Question Image <span style={{color:"var(--muted)",fontWeight:400}}>(optional)</span></label>
+                      <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",
+                        border:"1.5px dashed var(--border)",borderRadius:10,background:"var(--surface2)",width:"fit-content"}}>
+                        <span style={{fontSize:20}}>🖼️</span>
+                        <span style={{fontSize:13,color:"var(--muted)"}}>
+                          {qImage ? qImage.name : "Choose image (JPG / PNG / WEBP)"}
+                        </span>
+                        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                          style={{display:"none"}}
+                          onChange={e=>{
+                            const f=e.target.files[0];
+                            if(!f){setQImage(null);setQImagePreview(null);return;}
+                            if(f.size>10*1024*1024){showToast("Image must be under 10MB","error");return;}
+                            setQImage(f);
+                            setQImagePreview(URL.createObjectURL(f));
+                          }}/>
+                      </label>
+                      {qImagePreview && (
+                        <div style={{marginTop:10,position:"relative",display:"inline-block"}}>
+                          <img src={qImagePreview} alt="preview"
+                            style={{maxWidth:320,maxHeight:220,borderRadius:10,border:"1.5px solid var(--border)",objectFit:"contain"}}/>
+                          <button onClick={()=>{setQImage(null);setQImagePreview(null);}}
+                            style={{position:"absolute",top:4,right:4,background:"#EF4444",color:"#fff",
+                              border:"none",borderRadius:"50%",width:24,height:24,cursor:"pointer",fontSize:14,
+                              display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="t-field" style={{width:100}}>
                       <label className="t-label">Points</label>
                       <input className="t-input" type="number" min={1} max={10} value={newQ.points}
@@ -1135,6 +1198,38 @@ export default function TeacherDashboard() {
                   }
                 </div>
               </div>
+
+              {/* ── Inbox ── */}
+              <div className="t-card" style={{marginTop:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div className="t-card-title" style={{marginBottom:0}}>
+                    📬 My Notifications
+                    {unreadCount>0 && <span style={{marginLeft:8,background:"#EF4444",color:"#fff",borderRadius:999,fontSize:10,fontWeight:800,padding:"2px 7px"}}>{unreadCount} new</span>}
+                  </div>
+                  {unreadCount>0 && <button className="btn-ghost" style={{fontSize:11,padding:"4px 10px"}} onClick={markAllRead}>Mark all read</button>}
+                </div>
+                {inboxNotifs.length===0
+                  ? <div className="t-empty"><div className="t-empty-icon">📭</div>No notifications yet.</div>
+                  : inboxNotifs.map(n=>(
+                    <div key={n.id} style={{padding:"11px 14px",borderRadius:10,marginBottom:8,
+                      border:"1.5px solid",borderColor:n.is_read?"var(--border)":"var(--green-mid)",
+                      background:n.is_read?"var(--bg)":"var(--green-soft)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                        <span style={{fontWeight:700,fontSize:13,color:"var(--text)"}}>{n.title}</span>
+                        <span style={{fontSize:11,color:"var(--faint)",whiteSpace:"nowrap"}}>{new Date(n.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <p style={{fontSize:12,color:"var(--muted)",marginBottom:4}}>{n.message}</p>
+                      {n.file_url && (
+                        <a href={n.file_url} target="_blank" rel="noreferrer"
+                          style={{fontSize:11,color:"var(--green)",display:"inline-flex",alignItems:"center",gap:4}}>
+                          📎 Attachment
+                        </a>
+                      )}
+                    </div>
+                  ))
+                }
+              </div>
+
             </div>
           )}
 

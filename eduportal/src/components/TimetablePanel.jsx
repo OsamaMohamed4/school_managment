@@ -1,18 +1,26 @@
 import { useState, useEffect } from "react";
-import { timetableAPI } from "../api";
+import { timetableAPI, reportsAPI } from "../api";
 
 const DAYS      = ["sun","mon","tue","wed","thu","fri","sat"];
 const DAY_NAMES = {sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"Thursday",fri:"Friday",sat:"Saturday"};
 const COLORS    = ["#EFF6FF","#F0FDF4","#FFF7ED","#F5F3FF","#FEF3C7","#FEF2F2","#F0F9FF","#FAF5FF"];
 
 export default function TimetablePanel({ classId=null, readOnly=true, accentColor="#2563EB", isTeacher=false }) {
-  const [classes,   setClasses]   = useState([]); // for teacher: multiple classes
-  const [timetable, setTimetable] = useState({});
-  const [className, setClassName] = useState("");
-  const [loading,   setLoading]   = useState(false);
-  const [toast,     setToast]     = useState(null);
+  const [classes,      setClasses]      = useState([]);
+  const [timetable,    setTimetable]    = useState({});
+  const [className,    setClassName]    = useState("");
+  const [loading,      setLoading]      = useState(false);
+  const [downloading,  setDownloading]  = useState(false);
+  const [toast,        setToast]        = useState(null);
 
   const showToast = (msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+
+  const handleDownloadPDF = async () => {
+    setDownloading(true);
+    try { await reportsAPI.teacherTimetablePDF(); }
+    catch { showToast("Failed to download PDF","error"); }
+    finally { setDownloading(false); }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -82,9 +90,20 @@ export default function TimetablePanel({ classId=null, readOnly=true, accentColo
       {/* Teacher: multiple class timetables */}
       {isTeacher && (
         <>
-          <div style={{marginBottom:16}}>
-            <h3 style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>📅 My Classes Timetable</h3>
-            <p style={{fontSize:12,color:"#64748B",marginTop:3}}>View-only — timetable is managed by Admin</p>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h3 style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>📅 My Classes Timetable</h3>
+              <p style={{fontSize:12,color:"#64748B",marginTop:3}}>View-only — timetable is managed by Admin</p>
+            </div>
+            <button
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 16px",
+                borderRadius:9,background:accentColor,color:"#fff",border:"none",
+                fontSize:12,fontWeight:700,cursor:downloading?"not-allowed":"pointer",
+                opacity:downloading?0.7:1,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              {downloading ? "Downloading..." : "⬇ Download My Schedule PDF"}
+            </button>
           </div>
           {classes.length===0 ? (
             <div style={{textAlign:"center",padding:40,color:"#94A3B8",background:"#fff",borderRadius:14,border:"1.5px solid #E2E8F0"}}>

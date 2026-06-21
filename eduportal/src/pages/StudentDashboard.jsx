@@ -765,6 +765,11 @@ export default function StudentDashboard() {
                     <span className="s-q-pts">{q.points} pt{q.points>1?"s":""}</span>
                   </div>
                   <p className="s-q-text">{q.text}</p>
+                  {q.image_url && (
+                    <img src={q.image_url} alt="question"
+                      style={{maxWidth:"100%",maxHeight:280,borderRadius:12,objectFit:"contain",
+                        border:"1.5px solid #E2E8F0",marginBottom:14,display:"block"}}/>
+                  )}
                   {(q.question_type==="mcq"||q.question_type==="true_false") && q.choices?.map((c,ci)=>(
                     <button
                       key={c.id}

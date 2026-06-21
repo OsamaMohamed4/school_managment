@@ -43,8 +43,8 @@ class Question(models.Model):
     question_type = models.CharField(max_length=15, choices=TYPE_CHOICES, default=TYPE_MCQ)
     points        = models.PositiveIntegerField(default=1)
     order         = models.PositiveIntegerField(default=0)
-    # For short_answer: store the correct answer text
     correct_answer_text = models.CharField(max_length=500, blank=True)
+    image         = models.ImageField(upload_to="quiz_questions/", null=True, blank=True)
 
     class Meta:
         ordering = ["order"]

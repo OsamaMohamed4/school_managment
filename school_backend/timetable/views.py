@@ -66,30 +66,50 @@ class MyTimetableView(APIView):
 
 
 class MyTeacherTimetableView(APIView):
-    """Teacher: timetable for all their classes"""
+    """Teacher: only THIS teacher's own slots across their assigned classes"""
     def get(self, request):
         if request.user.role != "teacher":
             return Response({"error": "Teachers only."}, status=403)
 
         from django.db.models import Q
         from academics.models import ClassSubjectTeacher
-        subject_class_ids = ClassSubjectTeacher.objects.filter(
-            teacher=request.user
-        ).values_list("class_room_id", flat=True)
 
-        classes = ClassRoom.objects.filter(
-            Q(teacher=request.user) | Q(id__in=subject_class_ids)
-        ).select_related("grade").distinct()
+        teacher = request.user
+
+        # Build map: class_room_id → [subjects this teacher teaches in that class]
+        subject_entries = ClassSubjectTeacher.objects.filter(teacher=teacher)
+        subject_map = {}
+        for e in subject_entries:
+            subject_map.setdefault(e.class_room_id, []).append(e.subject)
+
+        # Classes where teacher is main teacher (but may have no subject assignment)
+        main_class_ids = set(ClassRoom.objects.filter(teacher=teacher).values_list("id", flat=True))
+        all_class_ids  = set(subject_map.keys()) | main_class_ids
+
+        all_classes = ClassRoom.objects.filter(id__in=all_class_ids).select_related("grade")
 
         result = []
-        for cls in classes:
-            slots = TimetableSlot.objects.filter(class_room=cls)
-            result.append({
-                "class_id":   cls.id,
-                "class_name": cls.name,
-                "grade":      cls.grade.name,
-                "timetable":  group_slots_by_day(slots),
-            })
+        for cls in all_classes:
+            if cls.id in subject_map:
+                # Filter to only the subjects this teacher teaches in this class
+                q = Q()
+                for subj in subject_map[cls.id]:
+                    q |= Q(subject__iexact=subj)
+                slots = TimetableSlot.objects.filter(class_room=cls).filter(q)
+            else:
+                # Main class teacher without a subject assignment → match by teacher_name
+                slots = TimetableSlot.objects.filter(
+                    class_room=cls, teacher_name=teacher.get_full_name()
+                )
+
+            if slots.exists():
+                result.append({
+                    "class_id":   cls.id,
+                    "class_name": cls.name,
+                    "grade":      cls.grade.name,
+                    "timetable":  group_slots_by_day(slots),
+                })
+
         return Response({"classes": result})
 
 

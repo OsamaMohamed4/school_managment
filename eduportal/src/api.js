@@ -94,7 +94,22 @@ export const quizzesAPI = {
   update:(id,d)=>request("/quizzes/"+id+"/",{method:"PATCH",body:JSON.stringify(d)}),
   delete:(id)=>request("/quizzes/"+id+"/",{method:"DELETE"}),
   toggle:(id)=>request("/quizzes/"+id+"/toggle/",{method:"PATCH"}),
-  addQuestion:(id,d)=>request("/quizzes/"+id+"/add-question/",{method:"POST",body:JSON.stringify(d)}),
+  addQuestion:(id,d,image)=>{
+    if(image){
+      const fd=new FormData();
+      Object.entries(d).forEach(([k,v])=>{
+        if(Array.isArray(v)) fd.append(k,JSON.stringify(v));
+        else if(v!=null) fd.append(k,v);
+      });
+      fd.append("image",image);
+      const token=getToken();
+      const base=(process.env.REACT_APP_API_URL||"http://localhost:8000").replace(/\/$/,"");
+      return fetch(base+"/api/quizzes/"+id+"/add-question/",{
+        method:"POST",headers:token?{Authorization:"Bearer "+token}:{},body:fd
+      }).then(async r=>{const data=await r.json();if(!r.ok)throw data;return data;});
+    }
+    return request("/quizzes/"+id+"/add-question/",{method:"POST",body:JSON.stringify(d)});
+  },
   deleteQuestion:(id,qid)=>request("/quizzes/"+id+"/delete-question/"+qid+"/",{method:"DELETE"}),
   results:(id)=>request("/quizzes/"+id+"/results/"),
   available:()=>request("/quizzes/available/"),
@@ -195,6 +210,20 @@ export const reportsAPI = {
     const a    = document.createElement("a");
     a.href     = url;
     a.download = `report_card_${studentId}.pdf`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
+  teacherTimetablePDF: async () => {
+    const token = getToken();
+    const res   = await fetch(`${API}/reports/teacher/timetable/pdf/`, {
+      headers: token ? { Authorization: "Bearer " + token } : {}
+    });
+    if (!res.ok) throw new Error("Failed");
+    const blob = await res.blob();
+    const url  = window.URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `my_schedule.pdf`;
     a.click();
     window.URL.revokeObjectURL(url);
   },

@@ -80,8 +80,12 @@ export default function MessagesPanel({ accentColor="#2563EB", accentBg="#EFF6FF
   const totalUnread = convs.reduce((a,c)=>a+(c.unread_count||0),0);
 
   return (
-    <div style={{height:"calc(100vh - 120px)",display:"flex",gap:14,minHeight:400}}>
+    <div className="msg-outer">
       <style>{`
+        .msg-outer{height:calc(100vh - 120px);display:flex;gap:14px;min-height:400px;}
+        .msg-sidebar{width:240px;display:flex;flex-direction:column;flex-shrink:0;}
+        .msg-main{flex:1;display:flex;flex-direction:column;background:#fff;border-radius:14px;border:1.5px solid #E2E8F0;overflow:hidden;}
+        .msg-back-btn{display:none;}
         .msg-item{padding:12px 14px;border-radius:11px;border:1.5px solid #E2E8F0;background:#fff;cursor:pointer;transition:all .18s;margin-bottom:7px;}
         .msg-item:hover{border-color:${accentColor};background:${accentBg};}
         .msg-item.sel{border-color:${accentColor};background:${accentBg};}
@@ -92,10 +96,18 @@ export default function MessagesPanel({ accentColor="#2563EB", accentBg="#EFF6FF
         .contact-btn:hover{border-color:${accentColor};background:${accentBg};}
         .msg-inp{flex:1;padding:10px 14px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:13px;font-family:inherit;outline:none;transition:border .2s;color:#0F172A;background:#fff;}
         .msg-inp:focus{border-color:${accentColor};}
+        @media(max-width:640px){
+          .msg-outer{display:block;height:auto;min-height:calc(100vh - 140px);}
+          .msg-sidebar{width:100%;}
+          .msg-sidebar.mob-hidden{display:none;}
+          .msg-main{border-radius:10px;min-height:calc(100vh - 200px);}
+          .msg-main.mob-hidden{display:none;}
+          .msg-back-btn{display:flex;align-items:center;gap:6px;background:none;border:none;color:${accentColor};font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;padding:0;margin-bottom:4px;}
+        }
       `}</style>
 
-      {/* LEFT: Conversations list */}
-      <div style={{width:240,display:"flex",flexDirection:"column",gap:0,flexShrink:0}}>
+      {/* LEFT: Conversations list — hidden on mobile when chat is open */}
+      <div className={`msg-sidebar${view==="chat"?" mob-hidden":""}`}>
         <div style={{display:"flex",gap:8,marginBottom:12}}>
           <button onClick={()=>setView("list")} style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${view==="list"?accentColor:"#E2E8F0"}`,background:view==="list"?accentBg:"#fff",color:view==="list"?accentColor:"#64748B",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
             Chats {totalUnread>0&&<span style={{background:"#EF4444",color:"#fff",borderRadius:999,padding:"1px 6px",fontSize:10,marginLeft:4}}>{totalUnread}</span>}
@@ -138,8 +150,8 @@ export default function MessagesPanel({ accentColor="#2563EB", accentBg="#EFF6FF
         </div>
       </div>
 
-      {/* RIGHT: Chat */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",background:"#fff",borderRadius:14,border:"1.5px solid #E2E8F0",overflow:"hidden"}}>
+      {/* RIGHT: Chat — hidden on mobile when list/new is active */}
+      <div className={`msg-main${view!=="chat"?" mob-hidden":""}`}>
         {!selConv?(
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",color:"#94A3B8"}}>
             <div style={{fontSize:40,marginBottom:10}}>💬</div>
@@ -148,6 +160,7 @@ export default function MessagesPanel({ accentColor="#2563EB", accentBg="#EFF6FF
         ):(
           <>
             <div style={{padding:"12px 16px",borderBottom:"1.5px solid #F1F5F9",background:"#FAFBFD"}}>
+              <button className="msg-back-btn" onClick={()=>setView("list")}>← Back</button>
               <div style={{fontWeight:700,fontSize:14,color:"#0F172A"}}>{selConv.other_user?.full_name}</div>
               <div style={{fontSize:11,color:"#94A3B8",textTransform:"capitalize"}}>{selConv.other_user?.role}</div>
             </div>

@@ -1,18 +1,25 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { usersAPI, academicsAPI, gradeBookAPI, analyticsAPI, parentAPI, timetableAPI } from "../api";
+import { usersAPI, academicsAPI, gradeBookAPI, analyticsAPI, parentAPI, timetableAPI, notificationsAPI } from "../api";
 import TimetablePanel from "../components/TimetablePanel";
 import AdminTimetableManager from "../components/AdminTimetableManager";
 
 const NAV = [
-  { id:"overview",  label:"Overview",        icon:"⊞" },
-  { id:"users",     label:"User Management", icon:"👥" },
-  { id:"academics", label:"Grades & Classes",icon:"🏫" },
-  { id:"parents",   label:"Parent Linking",  icon:"👨‍👩‍👦" },
-  { id:"gradebook", label:"Grade Book",      icon:"📊" },
-  { id:"analytics", label:"Analytics",       icon:"📈" },
-  { id:"timetable", label:"Timetable",       icon:"📅" },
+  { id:"overview",       label:"Overview",        icon:"⊞" },
+  { id:"users",          label:"User Management", icon:"👥" },
+  { id:"academics",      label:"Grades & Classes",icon:"🏫" },
+  { id:"parents",        label:"Parent Linking",  icon:"👨‍👩‍👦" },
+  { id:"gradebook",      label:"Grade Book",      icon:"📊" },
+  { id:"analytics",      label:"Analytics",       icon:"📈" },
+  { id:"notifications",  label:"Notifications",   icon:"🔔" },
+  { id:"timetable",      label:"Timetable",       icon:"📅" },
+];
+
+const NOTIF_TYPES = [
+  { value:"info",    label:"Info",    color:"#2563EB", bg:"#EFF6FF" },
+  { value:"warning", label:"Warning", color:"#D97706", bg:"#FEF3C7" },
+  { value:"success", label:"Success", color:"#059669", bg:"#ECFDF5" },
 ];
 
 const RC = { admin:"#2563EB", teacher:"#059669", student:"#7C3AED", parent:"#D97706" };
@@ -211,6 +218,13 @@ const S = `
   .a-an-table { overflow-x: auto; }
   .a-an-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; padding: 10px 14px; border-bottom: 1px solid var(--bg); font-size: 13px; align-items: center; gap: 8px; min-width: 420px; }
 
+  /* ── NOTIFICATIONS ── */
+  .a-notif-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 768px) { .a-notif-grid { grid-template-columns: 1fr 1fr; } }
+  .a-notif-type-btn { padding: 7px 14px; border-radius: 8px; border: 1.5px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Sora',sans-serif; transition: all .18s; }
+  .a-send-to-btn { padding: 6px 14px; border-radius: 8px; border: 1.5px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Sora',sans-serif; transition: all .18s; color: var(--muted); }
+  .a-send-to-btn.active { background: var(--blue-soft); color: var(--blue); border-color: var(--blue-mid); font-weight: 700; }
+
   /* ── TIMETABLE LAYOUT ── */
   .a-tt-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
   @media (min-width: 768px) { .a-tt-grid { grid-template-columns: 260px 1fr; } }
@@ -308,7 +322,8 @@ export default function AdminDashboard() {
   const [selClass,      setSelClass]      = useState(null);
   const [classStudents, setClassStudents] = useState([]);
   const [teachers,      setTeachers]      = useState([]);
-  const [unassigned,    setUnassigned]    = useState([]);
+  const [unassigned,      setUnassigned]      = useState([]);
+  const [unassignedSearch,setUnassignedSearch]= useState("");
   const [showAddGrade,  setShowAddGrade]  = useState(false);
   const [showAddClass,  setShowAddClass]  = useState(false);
   const [newGradeName,  setNewGradeName]  = useState("");
@@ -333,6 +348,20 @@ export default function AdminDashboard() {
 
   const [selTTClass, setSelTTClass] = useState(null);
   const [stats, setStats] = useState({ total:0, teachers:0, students:0, grades:0 });
+
+  // ── Notifications ────────────────────────────────────────
+  const [notifSendTo,      setNotifSendTo]      = useState("all");
+  const [notifClassId,     setNotifClassId]      = useState("");
+  const [notifGradeId,     setNotifGradeId]      = useState("");
+  const [notifTitle,       setNotifTitle]        = useState("");
+  const [notifMsg,         setNotifMsg]          = useState("");
+  const [notifType,        setNotifType]         = useState("info");
+  const [notifIncParents,  setNotifIncParents]   = useState(false);
+  const [notifIncTeachers, setNotifIncTeachers]  = useState(false);
+  const [notifFile,        setNotifFile]         = useState(null);
+  const [notifFilePreview, setNotifFilePreview]  = useState(null);
+  const [sendingNotif,     setSendingNotif]      = useState(false);
+  const [notifHistory,     setNotifHistory]      = useState([]);
 
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
@@ -406,7 +435,61 @@ export default function AdminDashboard() {
   },[]);
 
   useEffect(()=>{ if(tab==="gradebook"){ loadGrades(); loadGradeBook(gbClassFilter); } },[tab,gbClassFilter,loadGradeBook]);
+  useEffect(()=>{ if(tab==="notifications"){ loadGrades(); } },[tab,loadGrades]);
   useEffect(()=>{ if(tab==="analytics"){ setLoadingAn(true); analyticsAPI.dashboard().then(d=>{setAnalyticsData(d);setLoadingAn(false);}).catch(()=>setLoadingAn(false)); } },[tab]);
+
+  const handleNotifFileChange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    setNotifFile(f);
+    if (f.type.startsWith("image/")) {
+      const r = new FileReader();
+      r.onload = ev => setNotifFilePreview(ev.target.result);
+      r.readAsDataURL(f);
+    } else { setNotifFilePreview(null); }
+  };
+
+  const handleSendNotif = async () => {
+    if (!notifTitle.trim() || !notifMsg.trim()) { showToast("Title and message required","error"); return; }
+    if (notifSendTo==="class" && !notifClassId) { showToast("Select a class","error"); return; }
+    if (notifSendTo==="grade" && !notifGradeId) { showToast("Select a grade","error"); return; }
+    setSendingNotif(true);
+    try {
+      let payload;
+      if (notifFile) {
+        payload = new FormData();
+        payload.append("title", notifTitle);
+        payload.append("message", notifMsg);
+        payload.append("notif_type", notifType);
+        payload.append("include_parents",  notifIncParents  ? "true" : "false");
+        payload.append("include_teachers", notifIncTeachers ? "true" : "false");
+        if (notifSendTo==="all")   payload.append("send_all", "true");
+        if (notifSendTo==="grade") payload.append("grade_id", notifGradeId);
+        if (notifSendTo==="class") payload.append("class_id", notifClassId);
+        payload.append("file", notifFile);
+      } else {
+        payload = {
+          title: notifTitle, message: notifMsg, notif_type: notifType,
+          include_parents:  notifIncParents,
+          include_teachers: notifIncTeachers,
+          ...(notifSendTo==="all"   ? { send_all: true } : {}),
+          ...(notifSendTo==="grade" ? { grade_id: parseInt(notifGradeId) } : {}),
+          ...(notifSendTo==="class" ? { class_id: parseInt(notifClassId) } : {}),
+        };
+      }
+      const res = await notificationsAPI.send(payload);
+      showToast(res.message || "Sent!");
+      const targetLabel = notifSendTo==="all" ? "All School"
+        : notifSendTo==="grade" ? "Grade "+grades.find(g=>g.id===parseInt(notifGradeId))?.name
+        : "Class "+allClasses.find(c=>c.id===parseInt(notifClassId))?.name;
+      setNotifHistory(h=>[{ title:notifTitle, message:notifMsg, notif_type:notifType,
+        sent_at:new Date().toLocaleString(), count:res.count, target:targetLabel,
+        include_parents:notifIncParents, include_teachers:notifIncTeachers, file:notifFile?.name||null }, ...h]);
+      setNotifTitle(""); setNotifMsg(""); setNotifType("info");
+      setNotifFile(null); setNotifFilePreview(null); setNotifIncParents(false); setNotifIncTeachers(false);
+    } catch(e) { showToast(e?.error||"Failed","error"); }
+    finally { setSendingNotif(false); }
+  };
 
   const handleToggleUser = async(id)=>{ try { const res=await usersAPI.toggleStatus(id); setUsers(u=>u.map(x=>x.id===id?{...x,is_active:res.is_active}:x)); showToast(res.message); } catch{showToast("Action failed","error");} };
   const handleDeleteUser = async(id,name)=>{ if(!window.confirm(`Delete user "${name}"?`)) return; try { await usersAPI.delete(id); setUsers(u=>u.filter(x=>x.id!==id)); showToast("User deleted!"); } catch{showToast("Cannot delete this user","error");} };
@@ -665,7 +748,7 @@ export default function AdminDashboard() {
                   <div>
                     <h3 style={{fontSize:14,fontWeight:700,marginBottom:12,color:"var(--text)"}}>Select Class</h3>
                     {allClasses.map(c=>(
-                      <div key={c.id} className={`a-sel-item${selClass?.id===c.id?" active":""}`} onClick={()=>setSelClass(c)}>
+                      <div key={c.id} className={`a-sel-item${selClass?.id===c.id?" active":""}`} onClick={()=>{setSelClass(c);setUnassignedSearch("");}}>
                         <div style={{fontWeight:700,fontSize:13,color:"var(--text)"}}>Class {c.name} <span style={{color:"var(--muted)",fontWeight:400}}>({c.grade_name})</span></div>
                         <div style={{fontSize:12,color:"var(--muted)",marginTop:2}}>{c.student_count||0} students</div>
                       </div>
@@ -699,16 +782,34 @@ export default function AdminDashboard() {
                           </div>
                           {unassigned.length>0 && (
                             <div className="a-card">
-                              <div style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Unassigned Students</div>
-                              {unassigned.map(s=>(
-                                <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--bg)",gap:8}}>
-                                  <div style={{minWidth:0}}>
-                                    <div style={{fontSize:13,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.full_name}</div>
-                                    <div style={{fontSize:11,color:"var(--faint)"}}>{s.email}</div>
-                                  </div>
-                                  <button className="btn-green" style={{fontSize:10,flexShrink:0}} onClick={()=>handleAssignStudent(s.id)}>+ Add</button>
+                              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                                <div style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.5}}>
+                                  Unassigned Students ({unassigned.length})
                                 </div>
-                              ))}
+                              </div>
+                              <input
+                                type="text"
+                                placeholder="Search by name or email..."
+                                value={unassignedSearch}
+                                onChange={e=>setUnassignedSearch(e.target.value)}
+                                style={{width:"100%",padding:"7px 10px",border:"1.5px solid var(--border)",borderRadius:8,fontSize:12,marginBottom:10,outline:"none",fontFamily:"'Sora',sans-serif"}}
+                              />
+                              {(()=>{
+                                const q = unassignedSearch.trim().toLowerCase();
+                                const filtered = q
+                                  ? unassigned.filter(s=>s.full_name.toLowerCase().includes(q)||s.email.toLowerCase().includes(q))
+                                  : unassigned;
+                                if(filtered.length===0) return <div style={{textAlign:"center",color:"var(--faint)",fontSize:12,padding:"8px 0"}}>No students match your search.</div>;
+                                return filtered.map(s=>(
+                                  <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--bg)",gap:8}}>
+                                    <div style={{minWidth:0}}>
+                                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.full_name}</div>
+                                      <div style={{fontSize:11,color:"var(--faint)"}}>{s.email}</div>
+                                    </div>
+                                    <button className="btn-green" style={{fontSize:10,flexShrink:0}} onClick={()=>handleAssignStudent(s.id)}>+ Add</button>
+                                  </div>
+                                ));
+                              })()}
                             </div>
                           )}
                         </>
@@ -988,6 +1089,169 @@ export default function AdminDashboard() {
                     </>
                   )
               }
+            </div>
+          )}
+
+          {/* ══ NOTIFICATIONS ══ */}
+          {tab==="notifications" && (
+            <div className="fade">
+              <div className="a-notif-grid">
+
+                {/* ── Send Form ── */}
+                <div className="a-card">
+                  <div className="a-card-title">📢 Send Notification</div>
+
+                  {/* Send To */}
+                  <div className="a-field" style={{marginBottom:12}}>
+                    <label className="a-label">Send To</label>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
+                      {[["all","🏫 All School"],["grade","📚 By Grade"],["class","🚪 By Class"]].map(([v,l])=>(
+                        <button key={v} className={`a-send-to-btn${notifSendTo===v?" active":""}`}
+                          onClick={()=>setNotifSendTo(v)}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {notifSendTo==="grade" && (
+                    <div className="a-field" style={{marginBottom:12}}>
+                      <label className="a-label">Select Grade</label>
+                      <select className="a-select" value={notifGradeId} onChange={e=>setNotifGradeId(e.target.value)}
+                        style={{width:"100%",padding:"8px 10px",border:"1.5px solid var(--border)",borderRadius:8,fontSize:13,fontFamily:"'Sora',sans-serif"}}>
+                        <option value="">— Select Grade —</option>
+                        {grades.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {notifSendTo==="class" && (
+                    <div className="a-field" style={{marginBottom:12}}>
+                      <label className="a-label">Select Class</label>
+                      <select className="a-select" value={notifClassId} onChange={e=>setNotifClassId(e.target.value)}
+                        style={{width:"100%",padding:"8px 10px",border:"1.5px solid var(--border)",borderRadius:8,fontSize:13,fontFamily:"'Sora',sans-serif"}}>
+                        <option value="">— Select Class —</option>
+                        {allClasses.map(c=><option key={c.id} value={c.id}>Class {c.name} ({c.grade_name})</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Include Parents toggle */}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"10px 12px",
+                    background:notifIncParents?"#EFF6FF":"var(--bg)",border:"1.5px solid",
+                    borderColor:notifIncParents?"var(--blue-mid)":"var(--border)",borderRadius:8,cursor:"pointer"}}
+                    onClick={()=>setNotifIncParents(p=>!p)}>
+                    <div style={{width:36,height:20,borderRadius:10,background:notifIncParents?"var(--blue)":"var(--border)",
+                      transition:"background .2s",display:"flex",alignItems:"center",padding:"0 3px",flexShrink:0}}>
+                      <div style={{width:14,height:14,borderRadius:"50%",background:"#fff",
+                        transform:notifIncParents?"translateX(16px)":"translateX(0)",transition:"transform .2s"}}/>
+                    </div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Include Parents 👨‍👩‍👦</div>
+                      <div style={{fontSize:11,color:"var(--muted)"}}>Send a copy to linked parents</div>
+                    </div>
+                  </div>
+
+                  {/* Include Teachers toggle */}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"10px 12px",
+                    background:notifIncTeachers?"#ECFDF5":"var(--bg)",border:"1.5px solid",
+                    borderColor:notifIncTeachers?"#A7F3D0":"var(--border)",borderRadius:8,cursor:"pointer"}}
+                    onClick={()=>setNotifIncTeachers(p=>!p)}>
+                    <div style={{width:36,height:20,borderRadius:10,background:notifIncTeachers?"var(--green)":"var(--border)",
+                      transition:"background .2s",display:"flex",alignItems:"center",padding:"0 3px",flexShrink:0}}>
+                      <div style={{width:14,height:14,borderRadius:"50%",background:"#fff",
+                        transform:notifIncTeachers?"translateX(16px)":"translateX(0)",transition:"transform .2s"}}/>
+                    </div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Include Teachers 👩‍🏫</div>
+                      <div style={{fontSize:11,color:"var(--muted)"}}>Send a copy to class teachers</div>
+                    </div>
+                  </div>
+
+                  {/* Type */}
+                  <div className="a-field" style={{marginBottom:12}}>
+                    <label className="a-label">Type</label>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
+                      {NOTIF_TYPES.map(t=>(
+                        <button key={t.value} className="a-notif-type-btn"
+                          style={{background:notifType===t.value?t.color:"var(--surface)",
+                            color:notifType===t.value?"#fff":t.color,
+                            borderColor:notifType===t.value?t.color:"var(--border)"}}
+                          onClick={()=>setNotifType(t.value)}>{t.label}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div className="a-field" style={{marginBottom:12}}>
+                    <label className="a-label">Title</label>
+                    <input className="a-input" placeholder="Notification title..."
+                      value={notifTitle} onChange={e=>setNotifTitle(e.target.value)}/>
+                  </div>
+
+                  {/* Message */}
+                  <div className="a-field" style={{marginBottom:12}}>
+                    <label className="a-label">Message</label>
+                    <textarea className="a-input" rows={4} placeholder="Write your message..."
+                      value={notifMsg} onChange={e=>setNotifMsg(e.target.value)}
+                      style={{resize:"vertical",fontFamily:"'Sora',sans-serif"}}/>
+                  </div>
+
+                  {/* Attachment */}
+                  <div className="a-field" style={{marginBottom:14}}>
+                    <label className="a-label">Attachment (optional, max 50MB)</label>
+                    <input type="file" onChange={handleNotifFileChange} style={{fontSize:12,width:"100%",marginTop:4}}
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,image/jpeg,image/png,image/webp"/>
+                    {notifFile && (
+                      <div style={{marginTop:8,display:"flex",alignItems:"center",gap:10,padding:8,
+                        background:"var(--bg)",borderRadius:8,border:"1px solid var(--border)"}}>
+                        {notifFilePreview
+                          ? <img src={notifFilePreview} alt="" style={{width:40,height:40,objectFit:"cover",borderRadius:4}}/>
+                          : <span style={{fontSize:20}}>📎</span>
+                        }
+                        <span style={{fontSize:12,fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{notifFile.name}</span>
+                        <button className="btn-danger" style={{padding:"4px 8px",fontSize:11}}
+                          onClick={()=>{setNotifFile(null);setNotifFilePreview(null);}}>✕</button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button className="btn-blue" style={{width:"100%",justifyContent:"center",padding:"12px",fontSize:14}}
+                    disabled={sendingNotif} onClick={handleSendNotif}>
+                    {sendingNotif ? "Sending..." : "📢 Send Notification"}
+                  </button>
+                </div>
+
+                {/* ── Sent History ── */}
+                <div className="a-card">
+                  <div className="a-card-title">Sent This Session ({notifHistory.length})</div>
+                  {notifHistory.length===0
+                    ? <div className="a-empty"><div className="a-empty-icon">📭</div>No notifications sent yet.</div>
+                    : notifHistory.map((n,i)=>(
+                      <div key={i} style={{padding:"12px 14px",borderRadius:10,border:"1.5px solid var(--border)",
+                        marginBottom:8,background:"var(--bg)"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+                          marginBottom:4,gap:8,flexWrap:"wrap"}}>
+                          <span style={{fontWeight:700,fontSize:13,color:"var(--text)"}}>{n.title}</span>
+                          <span style={{fontSize:11,color:"var(--faint)",whiteSpace:"nowrap"}}>{n.sent_at}</span>
+                        </div>
+                        <p style={{fontSize:12,color:"var(--muted)",marginBottom:6}}>{n.message}</p>
+                        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{fontSize:10,padding:"2px 8px",borderRadius:999,fontWeight:700,
+                            background:NOTIF_TYPES.find(t=>t.value===n.notif_type)?.bg||"var(--bg)",
+                            color:NOTIF_TYPES.find(t=>t.value===n.notif_type)?.color||"var(--muted)"}}>
+                            {n.notif_type}
+                          </span>
+                          <span style={{fontSize:11,color:"var(--blue)",fontWeight:600}}>→ {n.target}</span>
+                          <span style={{fontSize:11,color:"var(--muted)"}}>({n.count} recipient{n.count!==1?"s":""})</span>
+                          {n.include_parents  && <span style={{fontSize:11,color:"var(--amber)",fontWeight:600}}>👨‍👩‍👦 +Parents</span>}
+                          {n.include_teachers && <span style={{fontSize:11,color:"var(--green)", fontWeight:600}}>👩‍🏫 +Teachers</span>}
+                          {n.file && <span style={{fontSize:11,color:"var(--blue)"}}>📎 {n.file}</span>}
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+
+              </div>
             </div>
           )}
 
