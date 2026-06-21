@@ -16,6 +16,16 @@ except Exception:
     ALLOWED_HOSTS = ["*"]
     CORS_ALLOWED_ORIGINS_STR = "http://localhost:3000"
 
+    # Fallback config helper to prevent NameError / IDE linting issues below
+    def config(name, default=None, cast=str):
+        import os
+        val = os.environ.get(name, default)
+        if val is None:
+            return default
+        if cast is bool:
+            return str(val).lower() in ("true", "1", "yes", "on")
+        return cast(val)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -119,7 +129,11 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in CORS_ALLOWED_ORIGINS_STR.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # ── Rate Limiting (Security #7) ──────────────────────────────
@@ -155,11 +169,7 @@ if "django-insecure" in SECRET_KEY and not DEBUG:
 # ── Media Files for Production (PythonAnywhere) ──────────────
 # On PythonAnywhere, set PYTHONANYWHERE_DOMAIN in .env
 # Then configure: Files → /media/ → mapped to MEDIA_ROOT
-try:
-    _pa_domain = config("PYTHONANYWHERE_DOMAIN", default="")
-except Exception:
-    import os as _os
-    _pa_domain = _os.environ.get("PYTHONANYWHERE_DOMAIN", "")
+_pa_domain = config("PYTHONANYWHERE_DOMAIN", default="")
 
 if _pa_domain:
     # Production: full URL for media files

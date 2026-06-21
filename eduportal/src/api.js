@@ -12,7 +12,7 @@ const request = async (path, opts = {}, _retry = false) => {
   const headers = { "Content-Type":"application/json", ...(token?{Authorization:"Bearer "+token}:{}), ...(opts.headers||{}) };
   const res     = await fetch(API + path, { ...opts, headers });
 
-  if (res.status === 401 && !_retry) {
+  if (res.status === 401 && path !== "/auth/login/" && !_retry) {
     if (_refreshing) { clearAuth(); window.location.href="/"; return; }
     const refresh = localStorage.getItem("refresh_token");
     if (refresh) {
