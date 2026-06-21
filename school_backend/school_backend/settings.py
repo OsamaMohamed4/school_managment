@@ -155,10 +155,15 @@ if "django-insecure" in SECRET_KEY and not DEBUG:
 # ── Media Files for Production (PythonAnywhere) ──────────────
 # On PythonAnywhere, set PYTHONANYWHERE_DOMAIN in .env
 # Then configure: Files → /media/ → mapped to MEDIA_ROOT
-import os as _os
-_pa_domain = _os.environ.get("PYTHONANYWHERE_DOMAIN", "")
+try:
+    _pa_domain = config("PYTHONANYWHERE_DOMAIN", default="")
+except Exception:
+    import os as _os
+    _pa_domain = _os.environ.get("PYTHONANYWHERE_DOMAIN", "")
+
 if _pa_domain:
     # Production: full URL for media files
     MEDIA_URL = f"https://{_pa_domain}/media/"
 else:
     MEDIA_URL = "/media/"
+
